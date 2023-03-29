@@ -4,18 +4,12 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"t808logger/protocol"
+	"t808logview/protocol"
 	"time"
-)
-
-var logPatternRe = regexp.MustCompile(
-	`^(?P<host>[^ ]+) (?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) GpsDataService:\d+ - \(\d+\)收到报文类型：\d+,报文内容：(?P<payload>[a-f0-9]+)$`,
 )
 
 var timestampSN uint64
@@ -35,23 +29,23 @@ type Entry struct {
 	TimestampSN uint64
 }
 
-func NewEntry(line string) (pr *Entry, err error) {
-	m := logPatternRe.FindStringSubmatch(line)
-	if m == nil {
-		return nil, errors.New("invalid payload")
-	}
-	fields := make(map[string]string)
-	for i, name := range logPatternRe.SubexpNames() {
-		if i != 0 && name != "" {
-			fields[name] = m[i]
-		}
+func NewEntry(event any) (pr *Entry, err error) {
+	msg := event.(map[string]any)["message"].(string)
+	timestampLayout := "2006-01-02 15:04:05"
+	if len(msg) < len(timestampLayout) {
+		return nil, fmt.Errorf("invalid timestamp: %s", msg)
 	}
 	pr = &Entry{}
-	pr.Timestamp, err = time.Parse("2006-01-02 15:04:05", fields["timestamp"])
+	pr.Timestamp, err = time.Parse(timestampLayout, msg[:len(timestampLayout)])
 	if err != nil {
 		return nil, err
 	}
-	payload, err := hex.DecodeString(fields["payload"])
+	payloadLeading := "报文内容："
+	payloadPos := strings.LastIndex(msg, payloadLeading)
+	if payloadPos < 0 {
+		return nil, fmt.Errorf("invalid payload: %s", msg)
+	}
+	payload, err := hex.DecodeString(msg[payloadPos+len(payloadLeading):])
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +65,7 @@ func ParseEntry(key, value []byte) (pr *Entry, err error) {
 	}
 	keyParts := strings.Split(string(key), ":")
 	if len(keyParts) != 3 {
-		return nil, errors.New("invalid key")
+		return nil, fmt.Errorf("invalid key: %s", string(key))
 	}
 	timestamp, err := time.Parse("20060102150405", keyParts[1])
 	if err != nil {
