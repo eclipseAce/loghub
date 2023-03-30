@@ -1,4 +1,4 @@
-package protocol
+package t808
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 
 type Packet struct {
 	Id           uint16
-	RsaEncrypted bool
+	Encrypted    bool
 	Versioned    bool
 	Version      uint8
 	IccId        string
@@ -57,7 +57,7 @@ func BytesToPacket(data []byte) (*Packet, error) {
 		return nil, err
 	}
 	pk.Length = attribute & 0x03FF
-	pk.RsaEncrypted = (attribute & 0x0400) != 0
+	pk.Encrypted = (attribute & 0x0400) != 0
 	pk.Splitted = (attribute & 0x2000) != 0
 	pk.Versioned = (attribute & 0x4000) != 0
 
@@ -112,7 +112,7 @@ func PacketToBytes(packet *Packet) ([]byte, error) {
 	}
 	var attribute uint16
 	attribute |= uint16(bodyLen)
-	if packet.RsaEncrypted {
+	if packet.Encrypted {
 		attribute |= 0x0400
 	}
 	if packet.Splitted {
