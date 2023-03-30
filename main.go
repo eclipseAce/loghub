@@ -34,7 +34,7 @@ func main() {
 	defer db.Close()
 
 	r := gin.Default()
-	r.GET("/query", func(c *gin.Context) {
+	r.GET("/api/query", func(c *gin.Context) {
 		var params struct {
 			SimNo string    `form:"simNo" binding:"required"`
 			Since time.Time `form:"since" time_format:"2006-01-02 15:04:05" binding:"required"`

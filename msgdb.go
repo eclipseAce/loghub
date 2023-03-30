@@ -191,6 +191,7 @@ func (mdb *MsgDB) createMsg(event any) (*Msg, error) {
 
 	packet, err := t808.BytesToPacket(payload)
 	if err != nil {
+		log.Printf("bad packet: %s", fields["payload"])
 		return nil, fmt.Errorf("bytesToPacket: %w", err)
 	}
 
