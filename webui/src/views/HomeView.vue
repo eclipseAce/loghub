@@ -8,7 +8,7 @@
                 <el-date-picker v-model="form.since" type="datetime" placeholder="选择最早时间" align="right" :picker-options="pickerOptions"> </el-date-picker>
             </el-form-item>
             <el-form-item label="结束时间戳" prop="until">
-                <el-date-picker v-model="form.until" type="datetime" placeholder="选择最早时间" value-format="yyyy-MM-dd HH:mm:ss" align="right">
+                <el-date-picker v-model="form.until" type="datetime" placeholder="选择最晚时间" value-format="yyyy-MM-dd HH:mm:ss" align="right">
                 </el-date-picker>
             </el-form-item>
             <el-form-item>
@@ -17,9 +17,15 @@
         </el-form>
         <el-table v-loading="loading" :data="items" :height="800" stripe size="mini" style="width: 100%">
             <el-table-column prop="timestamp" label="时间戳" width="160" align="center"></el-table-column>
-            <el-table-column prop="simNo" label="SimNo" width="160" align="right"></el-table-column>
+            <el-table-column prop="simNo" label="SIM卡号" width="160" align="right"></el-table-column>
             <el-table-column prop="msgId" label="消息ID" width="80" align="center"></el-table-column>
             <el-table-column prop="msgSn" label="消息SN" width="80" align="right"></el-table-column>
+            <el-table-column prop="version" label="消息版本" width="80" align="right">
+                <template slot-scope="{ row: { version } }">
+                    <span v-if="version == -1">-</span>
+                    <span v-else>{{ version }}</span>
+                </template>
+            </el-table-column>
             <el-table-column prop="split" label="分包" width="80" align="right"></el-table-column>
             <el-table-column prop="raw" label="原始消息">
                 <template slot-scope="{ row: { raw, info } }">
@@ -103,6 +109,7 @@ export default {
                             timestamp: moment.utc(it.Timestamp).format(dateFormat),
                             msgId: it.MsgID.toString(16).padStart(4, 0),
                             msgSn: it.MsgSN,
+                            version: it.MsgVersion,
                             split: `${it.PartIndex + 1}/${it.PartTotal}`,
                             info: [`${it.BadChecksum ? '校验码错误' : ''}`, `${it.BadBodyLen? '消息体长度错误' : ''}`].filter((inf) => inf !== '').join(';'),
                             raw: base64ToHex(it.Raw),
@@ -144,6 +151,5 @@ export default {
     box-sizing: border-box;
     font-family: monospace;
     font-size: 12px;
-    font-weight: bold;
 }
 </style>

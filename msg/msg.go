@@ -59,7 +59,7 @@ func ParseMsgKey(key []byte) (simNo string, timestamp time.Time, sn uint64, err 
 	return
 }
 
-func NewMsgFromLog(msgLog string, seq *badger.Sequence) (*Msg, error) {
+func NewMsgFromLog(msgLog string, nextSeq func() (uint64, error)) (*Msg, error) {
 	matches := msgLogRegex.FindStringSubmatch(msgLog)
 	if matches == nil {
 		return nil, fmt.Errorf("invalid message: %s", msgLog)
@@ -78,7 +78,7 @@ func NewMsgFromLog(msgLog string, seq *badger.Sequence) (*Msg, error) {
 	if err != nil {
 		return nil, err
 	}
-	sn, err := seq.Next()
+	sn, err := nextSeq()
 	if err != nil {
 		return nil, fmt.Errorf("seq next: %w", err)
 	}
@@ -161,9 +161,11 @@ func (m *Msg) decode() error {
 
 	var iccIdData []byte
 	if (attribute & 0x4000) != 0 { // versioned flag
-		if err := binary.Read(buf, binary.BigEndian, &m.MsgVersion); err != nil {
+		var version uint8
+		if err := binary.Read(buf, binary.BigEndian, &version); err != nil {
 			return err
 		}
+		m.MsgVersion = int16(version)
 		iccIdData = make([]byte, 10)
 	} else {
 		m.MsgVersion = -1

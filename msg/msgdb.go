@@ -112,7 +112,7 @@ func (mdb *MsgDB) statTask() {
 }
 
 func (mdb *MsgDB) handleEvent(event any) error {
-	m, err := NewMsgFromLog(event.(map[string]any)["message"].(string), mdb.seq)
+	m, err := NewMsgFromLog(event.(map[string]any)["message"].(string), mdb.seq.Next)
 	if err != nil {
 		return err
 	}
