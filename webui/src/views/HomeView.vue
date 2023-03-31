@@ -104,7 +104,7 @@ export default {
                             msgId: it.MsgID.toString(16).padStart(4, 0),
                             msgSn: it.MsgSN,
                             split: `${it.PartIndex + 1}/${it.PartTotal}`,
-                            info: [`${it.BadChecksum ? '校验码错误' : ''}`, `${it.BadChecksum ? '消息体长度错误' : ''}`].filter((inf) => inf !== '').join(';'),
+                            info: [`${it.BadChecksum ? '校验码错误' : ''}`, `${it.BadBodyLen? '消息体长度错误' : ''}`].filter((inf) => inf !== '').join(';'),
                             raw: base64ToHex(it.Raw),
                         }))
                         .reverse()
