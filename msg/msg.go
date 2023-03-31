@@ -84,7 +84,7 @@ func NewMsgFromLog(msgLog string, seq *badger.Sequence) (*Msg, error) {
 	}
 	m := &Msg{SN: sn, Raw: payload, Timestamp: timestamp}
 	if err := m.decode(); err != nil {
-		return nil, fmt.Errorf("bad payload: %w", err)
+		return nil, fmt.Errorf("bad payload (%s) %w", fields["payload"], err)
 	}
 	return m, nil
 }
