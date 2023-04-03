@@ -12,13 +12,6 @@ import (
 	"github.com/elastic/go-lumber/server"
 )
 
-func closeOnError(fn func() error, err *error) error {
-	if err != nil && *err != nil {
-		return fn()
-	}
-	return nil
-}
-
 type MsgDB struct {
 	db        *badger.DB
 	seq       *badger.Sequence
@@ -29,17 +22,23 @@ type MsgDB struct {
 }
 
 func NewMsgDB(path string, bulkSize uint) (mdb *MsgDB, err error) {
+	callOnError := func(fn func() error) {
+		if err != nil {
+			fn()
+		}
+	}
+
 	db, err := badger.Open(badger.DefaultOptions(path))
 	if err != nil {
 		return nil, err
 	}
-	defer closeOnError(db.Close, &err)
+	defer callOnError(db.Close)
 
 	seq, err := db.GetSequence([]byte("msgseq"), 10000)
 	if err != nil {
 		return nil, err
 	}
-	defer closeOnError(seq.Release, &err)
+	defer callOnError(seq.Release)
 
 	mdb = &MsgDB{
 		db:        db,

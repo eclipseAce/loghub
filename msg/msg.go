@@ -12,10 +12,6 @@ import (
 	"time"
 )
 
-var logPattern = regexp.MustCompile(
-	`^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) GpsDataService:\d+ - \([0-9A-F]+\)收到报文类型：\d+,报文内容：(?P<payload>[a-f0-9]+)$`,
-)
-
 type Msg struct {
 	SN        uint64
 	Raw       []byte
@@ -134,6 +130,10 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 	// last byte is checksum, ignore
 	return m, nil
 }
+
+var logPattern = regexp.MustCompile(
+	`^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) GpsDataService:\d+ - \([0-9A-F]+\)收到报文类型：\d+,报文内容：(?P<payload>[a-f0-9]+)$`,
+)
 
 func DecodeLog(log string, sn uint64) (*Msg, error) {
 	matches := logPattern.FindStringSubmatch(log)
