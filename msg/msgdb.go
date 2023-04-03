@@ -137,7 +137,7 @@ func (mdb *MsgDB) flush() {
 			select {
 			case e := <-mdb.entryChan:
 				if err := txn.SetEntry(e); err != nil {
-					log.Println(fmt.Errorf("db setEntry: %w", err))
+					log.Println(fmt.Errorf("flush setEntry: %w", err))
 				}
 			default:
 				return nil
@@ -145,7 +145,7 @@ func (mdb *MsgDB) flush() {
 		}
 		return nil
 	}); err != nil {
-		log.Println(fmt.Errorf("db update: %w", err))
+		log.Println(fmt.Errorf("flush update: %w", err))
 	}
 }
 
@@ -182,12 +182,12 @@ func (mdb *MsgDB) Query(simNo string, since, until time.Time, filter func(*Msg) 
 			}
 			val, err := item.ValueCopy(make([]byte, 0, item.ValueSize()))
 			if err != nil {
-				log.Println(fmt.Errorf("db valueCopy: %w", err))
+				log.Println(fmt.Errorf("query valueCopy: %w", err))
 				continue
 			}
 			m, err := DecodeEntry(item.Key(), val)
 			if err != nil {
-				log.Println(fmt.Errorf("invalid msg: %w", err))
+				log.Println(fmt.Errorf("query decode msg: %w", err))
 				continue
 			}
 			if filter == nil || filter(m) {

@@ -25,7 +25,7 @@ type MsgKey struct {
 
 func DecodeKey(b []byte) (*MsgKey, error) {
 	if len(b) < 16 {
-		return nil, errors.New("invalid key bytes")
+		return nil, errors.New("invalid key length")
 	}
 	off := len(b) - 16
 	return &MsgKey{
@@ -38,7 +38,7 @@ func DecodeKey(b []byte) (*MsgKey, error) {
 func (mk *MsgKey) Encode() ([]byte, error) {
 	simNo, err := hex.DecodeString(strings.Repeat("0", len(mk.SimNo)%2) + mk.SimNo)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid simNo: %w", err)
 	}
 	buf := &bytes.Buffer{}
 	buf.Write(simNo)
@@ -106,13 +106,13 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 
 	// read msg id
 	if err := binary.Read(buf, binary.BigEndian, &m.MsgID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid msgId: %w", err)
 	}
 
 	// read msg attributes
 	var attribute uint16
 	if err := binary.Read(buf, binary.BigEndian, &attribute); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid msgAttr: %w", err)
 	}
 
 	// read encrypt bits
@@ -122,7 +122,7 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 	if (attribute & 0x4000) != 0 {
 		var version uint8
 		if err := binary.Read(buf, binary.BigEndian, &version); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid version: %w", err)
 		}
 		m.Version = int16(version)
 	} else {
@@ -135,22 +135,22 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 		simNoData = make([]byte, 10)
 	}
 	if err := binary.Read(buf, binary.BigEndian, simNoData); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid simNo: %w", err)
 	}
 	m.SimNo = strings.TrimLeft(hex.EncodeToString(simNoData), "0")
 
 	// read msg sn
 	if err := binary.Read(buf, binary.BigEndian, &m.MsgSN); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid msgSn: %w", err)
 	}
 
 	// read split info
 	if (attribute & 0x2000) != 0 {
 		if err := binary.Read(buf, binary.BigEndian, &m.PartTotal); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid msgPartTotal: %w", err)
 		}
 		if err := binary.Read(buf, binary.BigEndian, &m.PartIndex); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid msgPartIndex: %w", err)
 		}
 	} else {
 		m.PartTotal = 1
@@ -165,7 +165,7 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 	if remain > 1 {
 		m.Body = make([]byte, remain-1)
 		if err := binary.Read(buf, binary.BigEndian, m.Body); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid msgBody: %w", err)
 		}
 	} else {
 		if remain == 0 {
@@ -181,7 +181,7 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 func DecodeLog(log string, sn uint64) (*Msg, error) {
 	matches := logPattern.FindStringSubmatch(log)
 	if matches == nil {
-		return nil, fmt.Errorf("invalid message: %s", log)
+		return nil, fmt.Errorf("invalid log: %s", log)
 	}
 	fields := make(map[string]string)
 	for i, name := range logPattern.SubexpNames() {
@@ -191,11 +191,11 @@ func DecodeLog(log string, sn uint64) (*Msg, error) {
 	}
 	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", fields["timestamp"], time.Local)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid log timestamp: %w", err)
 	}
 	payload, err := hex.DecodeString(fields["payload"])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid log payload: %w", err)
 	}
 	return Decode(payload, timestamp, sn)
 }
@@ -208,11 +208,11 @@ func DecodeEntry(key, val []byte) (*Msg, error) {
 	if len(val) >= 2 && val[0] == 0x1F && val[1] == 0x8B {
 		gzr, err := gzip.NewReader(bytes.NewReader(val))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid gzip: %w", err)
 		}
 		val, err = io.ReadAll(gzr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read gzip: %w", err)
 		}
 	}
 	return Decode(val, mk.Timestamp, mk.SN)
@@ -232,10 +232,10 @@ func (m *Msg) Encode() (key, val []byte, err error) {
 		buf := &bytes.Buffer{}
 		gzw := gzip.NewWriter(buf)
 		if _, err := gzw.Write(m.Raw); err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("write gzip: %w", err)
 		}
 		if err := gzw.Close(); err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("close gzip: %w", err)
 		}
 		val = buf.Bytes()
 	}
