@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -16,48 +15,6 @@ import (
 var logPattern = regexp.MustCompile(
 	`^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) GpsDataService:\d+ - \([0-9A-F]+\)收到报文类型：\d+,报文内容：(?P<payload>[a-f0-9]+)$`,
 )
-
-type MsgKey struct {
-	SimNo     string
-	Timestamp time.Time
-	SN        uint64
-}
-
-func DecodeKey(b []byte) (*MsgKey, error) {
-	if len(b) < 16 {
-		return nil, errors.New("invalid key length")
-	}
-	off := len(b) - 16
-	return &MsgKey{
-		SimNo:     hex.EncodeToString(b[:off]),
-		Timestamp: time.Unix(int64(binary.BigEndian.Uint64(b[off:off+8])), 0),
-		SN:        binary.BigEndian.Uint64(b[off+8 : off+8+8]),
-	}, nil
-}
-
-func (mk *MsgKey) Encode() ([]byte, error) {
-	simNo, err := hex.DecodeString(strings.Repeat("0", len(mk.SimNo)%2) + mk.SimNo)
-	if err != nil {
-		return nil, fmt.Errorf("invalid simNo: %w", err)
-	}
-	buf := &bytes.Buffer{}
-	buf.Write(simNo)
-	binary.Write(buf, binary.BigEndian, uint64(mk.Timestamp.UTC().Unix()))
-	binary.Write(buf, binary.BigEndian, mk.SN)
-	return buf.Bytes(), nil
-}
-
-func EncodeKeyRange(simNo string, since, until time.Time) (sinceKey, untilKey []byte, err error) {
-	sk := &MsgKey{SimNo: simNo, Timestamp: since, SN: uint64(0)}
-	uk := &MsgKey{SimNo: simNo, Timestamp: until, SN: ^uint64(0)}
-	if sinceKey, err = sk.Encode(); err != nil {
-		return nil, nil, err
-	}
-	if untilKey, err = uk.Encode(); err != nil {
-		return nil, nil, err
-	}
-	return
-}
 
 type Msg struct {
 	SN        uint64
@@ -85,10 +42,10 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 		b1, b2 := raw[i], raw[i+1]
 		switch {
 		case b1 == 0x7D && b2 == 0x01:
-			buf.WriteByte(0x7E)
+			buf.WriteByte(0x7D)
 			i++
 		case b1 == 0x7D && b2 == 0x02:
-			buf.WriteByte(0x7D)
+			buf.WriteByte(0x7E)
 			i++
 		default:
 			buf.WriteByte(b1)
