@@ -106,10 +106,10 @@ export default {
                     this.items = results
                         .map((it) => ({
                             simNo: it.SimNo,
-                            timestamp: moment.utc(it.Timestamp).format(dateFormat),
+                            timestamp: moment(it.Timestamp).format(dateFormat),
                             msgId: it.MsgID.toString(16).padStart(4, 0),
                             msgSn: it.MsgSN,
-                            version: it.MsgVersion,
+                            version: it.Version,
                             split: `${it.PartIndex + 1}/${it.PartTotal}`,
                             info: [`${it.BadChecksum ? '校验码错误' : ''}`, `${it.BadBodyLen? '消息体长度错误' : ''}`].filter((inf) => inf !== '').join(';'),
                             raw: base64ToHex(it.Raw),

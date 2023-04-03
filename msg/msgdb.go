@@ -2,6 +2,7 @@ package msg
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"sync"
@@ -112,18 +113,22 @@ func (mdb *MsgDB) statTask() {
 }
 
 func (mdb *MsgDB) handleEvent(event any) error {
-	m, err := NewMsgFromLog(event.(map[string]any)["message"].(string), mdb.seq.Next)
+	sn, err := mdb.seq.Next()
 	if err != nil {
 		return err
 	}
-	e, err := m.ToEntry()
+	m, err := DecodeLog(event.(map[string]any)["message"].(string), sn)
+	if err != nil {
+		return err
+	}
+	key, val, err := m.Encode()
 	if err != nil {
 		return err
 	}
 	if len(mdb.entryChan) == cap(mdb.entryChan) {
 		mdb.flush()
 	}
-	mdb.entryChan <- e.WithTTL(48 * time.Hour)
+	mdb.entryChan <- badger.NewEntry(key, val).WithTTL(48 * time.Hour)
 	return nil
 }
 
@@ -163,23 +168,31 @@ func (mdb *MsgDB) Close() error {
 }
 
 func (mdb *MsgDB) Query(simNo string, since, until time.Time, filter func(*Msg) bool) ([]*Msg, error) {
+	sinceKey, untilKey, err := EncodeKeyRange(simNo, since, until)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("since: %s, until: %s", hex.EncodeToString(sinceKey), hex.EncodeToString(untilKey))
 	results := make([]*Msg, 0)
 	if err := mdb.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		sinceKey := NewMsgKey(simNo, since, 0x00000000)
-		untilKey := NewMsgKey(simNo, until, 0xFFFFFFFF)
 		for it.Seek(sinceKey); ; it.Next() {
 			item := it.Item()
 			if bytes.Compare(item.Key(), untilKey) > 0 {
 				break
 			}
-			m, err := NewMsgFromItem(item)
-			if err != nil {
+			if err := item.Value(func(val []byte) error {
+				m, err := DecodeEntry(item.Key(), val)
+				if err != nil {
+					return err
+				}
+				if filter == nil || filter(m) {
+					results = append(results, m)
+				}
+				return nil
+			}); err != nil {
 				log.Println(fmt.Errorf("db read value: %w", err))
-			}
-			if filter == nil || filter(m) {
-				results = append(results, m)
 			}
 		}
 		return nil

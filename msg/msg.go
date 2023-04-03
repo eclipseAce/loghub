@@ -9,127 +9,80 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/dgraph-io/badger/v4"
 )
 
-type Msg struct {
-	SN           uint64
-	SimNo        string
-	MsgID        uint16
-	MsgSN        uint16
-	MsgVersion   int16
-	MsgEncrypted bool
-	PartTotal    uint16
-	PartIndex    uint16
-	Body         []byte
-	BadChecksum  bool
-	BadBodyLen   bool
-	Raw          []byte
-	Timestamp    time.Time
-}
-
-var msgLogRegex = regexp.MustCompile(
+var logPattern = regexp.MustCompile(
 	`^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) GpsDataService:\d+ - \([0-9A-F]+\)收到报文类型：\d+,报文内容：(?P<payload>[a-f0-9]+)$`,
 )
 
-const keyTimestampLayout = "20060102150405"
-
-func NewMsgKey(simNo string, timestamp time.Time, sn uint64) []byte {
-	return []byte(fmt.Sprintf("%s:%s:%08x", simNo, timestamp.Format(keyTimestampLayout), sn))
+type MsgKey struct {
+	SimNo     string
+	Timestamp time.Time
+	SN        uint64
 }
 
-func ParseMsgKey(key []byte) (simNo string, timestamp time.Time, sn uint64, err error) {
-	keyParts := strings.Split(string(key), ":")
-	if len(keyParts) != 3 {
-		err = errors.New("invalid key")
-		return
+func DecodeKey(b []byte) (*MsgKey, error) {
+	if len(b) < 16 {
+		return nil, errors.New("invalid key bytes")
 	}
-	timestamp, err = time.Parse(keyTimestampLayout, keyParts[1])
+	off := len(b) - 16
+	return &MsgKey{
+		SimNo:     hex.EncodeToString(b[:off]),
+		Timestamp: time.Unix(int64(binary.BigEndian.Uint64(b[off:off+8])), 0),
+		SN:        binary.BigEndian.Uint64(b[off+8 : off+8+8]),
+	}, nil
+}
+
+func (mk *MsgKey) Encode() ([]byte, error) {
+	simNo, err := hex.DecodeString(strings.Repeat("0", len(mk.SimNo)%2) + mk.SimNo)
 	if err != nil {
-		return
+		return nil, err
 	}
-	sn, err = strconv.ParseUint(keyParts[2], 16, 0)
-	if err != nil {
-		return
+	buf := &bytes.Buffer{}
+	buf.Write(simNo)
+	binary.Write(buf, binary.BigEndian, uint64(mk.Timestamp.UTC().Unix()))
+	binary.Write(buf, binary.BigEndian, mk.SN)
+	return buf.Bytes(), nil
+}
+
+func EncodeKeyRange(simNo string, since, until time.Time) (sinceKey, untilKey []byte, err error) {
+	sk := &MsgKey{SimNo: simNo, Timestamp: since, SN: uint64(0)}
+	uk := &MsgKey{SimNo: simNo, Timestamp: until, SN: ^uint64(0)}
+	if sinceKey, err = sk.Encode(); err != nil {
+		return nil, nil, err
+	}
+	if untilKey, err = uk.Encode(); err != nil {
+		return nil, nil, err
 	}
 	return
 }
 
-func NewMsgFromLog(msgLog string, nextSeq func() (uint64, error)) (*Msg, error) {
-	matches := msgLogRegex.FindStringSubmatch(msgLog)
-	if matches == nil {
-		return nil, fmt.Errorf("invalid message: %s", msgLog)
-	}
-	fields := make(map[string]string)
-	for i, name := range msgLogRegex.SubexpNames() {
-		if i != 0 && name != "" {
-			fields[name] = matches[i]
-		}
-	}
-	timestamp, err := time.Parse("2006-01-02 15:04:05", fields["timestamp"])
-	if err != nil {
-		return nil, err
-	}
-	payload, err := hex.DecodeString(fields["payload"])
-	if err != nil {
-		return nil, err
-	}
-	sn, err := nextSeq()
-	if err != nil {
-		return nil, fmt.Errorf("seq next: %w", err)
-	}
-	m := &Msg{SN: sn, Raw: payload, Timestamp: timestamp}
-	if err := m.decode(); err != nil {
-		return nil, fmt.Errorf("bad payload (%s) %w", fields["payload"], err)
-	}
-	return m, nil
+type Msg struct {
+	SN        uint64
+	Raw       []byte
+	Timestamp time.Time
+
+	MsgID       uint16
+	MsgSN       uint16
+	SimNo       string
+	Version     int16
+	Encrypted   bool
+	PartTotal   uint16
+	PartIndex   uint16
+	Body        []byte
+	BadChecksum bool
+	BadBodyLen  bool
 }
 
-func NewMsgFromItem(item *badger.Item) (m *Msg, err error) {
-	m = &Msg{}
-	_, m.Timestamp, m.SN, err = ParseMsgKey(item.Key())
-	if err != nil {
-		return nil, err
-	}
-	if err := item.Value(func(val []byte) error {
-		gz, err := gzip.NewReader(bytes.NewReader(val))
-		if err != nil {
-			return err
-		}
-		m.Raw, err = io.ReadAll(gz)
-		if err != nil {
-			return err
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	if err := m.decode(); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
+func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
+	m := &Msg{Timestamp: timestamp, SN: sn, Raw: raw}
 
-func (m *Msg) ToEntry() (*badger.Entry, error) {
-	val := &bytes.Buffer{}
-	gz := gzip.NewWriter(val)
-	if _, err := gz.Write(m.Raw); err != nil {
-		return nil, err
-	}
-	if err := gz.Close(); err != nil {
-		return nil, err
-	}
-	return badger.NewEntry(NewMsgKey(m.SimNo, m.Timestamp, m.SN), val.Bytes()), nil
-}
-
-func (m *Msg) decode() error {
+	// unescape
 	buf := new(bytes.Buffer)
-	for i := 1; i+1 < len(m.Raw); i++ {
-		b1, b2 := m.Raw[i], m.Raw[i+1]
+	for i := 1; i+1 < len(raw); i++ {
+		b1, b2 := raw[i], raw[i+1]
 		switch {
 		case b1 == 0x7D && b2 == 0x01:
 			buf.WriteByte(0x7E)
@@ -142,6 +95,7 @@ func (m *Msg) decode() error {
 		}
 	}
 
+	// checksum
 	var checksum uint8
 	for _, b := range buf.Bytes() {
 		checksum ^= b
@@ -150,59 +104,140 @@ func (m *Msg) decode() error {
 		m.BadChecksum = true
 	}
 
+	// read msg id
 	if err := binary.Read(buf, binary.BigEndian, &m.MsgID); err != nil {
-		return err
+		return nil, err
 	}
+
+	// read msg attributes
 	var attribute uint16
 	if err := binary.Read(buf, binary.BigEndian, &attribute); err != nil {
-		return err
+		return nil, err
 	}
-	m.MsgEncrypted = (attribute & 0x0400) != 0
 
-	var iccIdData []byte
-	if (attribute & 0x4000) != 0 { // versioned flag
+	// read encrypt bits
+	m.Encrypted = (attribute & 0x0400) != 0
+
+	// read version
+	if (attribute & 0x4000) != 0 {
 		var version uint8
 		if err := binary.Read(buf, binary.BigEndian, &version); err != nil {
-			return err
+			return nil, err
 		}
-		m.MsgVersion = int16(version)
-		iccIdData = make([]byte, 10)
+		m.Version = int16(version)
 	} else {
-		m.MsgVersion = -1
-		iccIdData = make([]byte, 6)
+		m.Version = -1
 	}
 
-	if err := binary.Read(buf, binary.BigEndian, iccIdData); err != nil {
-		return err
+	// read simNo
+	simNoData := make([]byte, 6)
+	if m.Version != -1 {
+		simNoData = make([]byte, 10)
 	}
-	m.SimNo = strings.TrimLeft(hex.EncodeToString(iccIdData), "0")
+	if err := binary.Read(buf, binary.BigEndian, simNoData); err != nil {
+		return nil, err
+	}
+	m.SimNo = strings.TrimLeft(hex.EncodeToString(simNoData), "0")
+
+	// read msg sn
 	if err := binary.Read(buf, binary.BigEndian, &m.MsgSN); err != nil {
-		return err
+		return nil, err
 	}
-	if (attribute & 0x2000) != 0 { // splitted flag
+
+	// read split info
+	if (attribute & 0x2000) != 0 {
 		if err := binary.Read(buf, binary.BigEndian, &m.PartTotal); err != nil {
-			return err
+			return nil, err
 		}
 		if err := binary.Read(buf, binary.BigEndian, &m.PartIndex); err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		m.PartTotal = 1
 		m.PartIndex = 0
 	}
+
+	// read msg body
 	remain := buf.Len()
 	if int(attribute&0x03FF) != remain-1 {
 		m.BadBodyLen = true
 	}
 	if remain > 1 {
 		m.Body = make([]byte, remain-1)
-		binary.Read(buf, binary.BigEndian, m.Body)
+		if err := binary.Read(buf, binary.BigEndian, m.Body); err != nil {
+			return nil, err
+		}
 	} else {
 		if remain == 0 {
 			m.BadChecksum = true
 		}
 		m.Body = []byte{}
 	}
+
 	// last byte is checksum, ignore
-	return nil
+	return m, nil
+}
+
+func DecodeLog(log string, sn uint64) (*Msg, error) {
+	matches := logPattern.FindStringSubmatch(log)
+	if matches == nil {
+		return nil, fmt.Errorf("invalid message: %s", log)
+	}
+	fields := make(map[string]string)
+	for i, name := range logPattern.SubexpNames() {
+		if i != 0 && name != "" {
+			fields[name] = matches[i]
+		}
+	}
+	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", fields["timestamp"], time.Local)
+	if err != nil {
+		return nil, err
+	}
+	payload, err := hex.DecodeString(fields["payload"])
+	if err != nil {
+		return nil, err
+	}
+	return Decode(payload, timestamp, sn)
+}
+
+func DecodeEntry(key, val []byte) (*Msg, error) {
+	mk, err := DecodeKey(key)
+	if err != nil {
+		return nil, err
+	}
+	if len(val) >= 2 && val[0] == 0x1F && val[1] == 0x8B {
+		gzr, err := gzip.NewReader(bytes.NewReader(val))
+		if err != nil {
+			return nil, err
+		}
+		val, err = io.ReadAll(gzr)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return Decode(val, mk.Timestamp, mk.SN)
+}
+
+func (m *Msg) Key() *MsgKey {
+	return &MsgKey{SimNo: m.SimNo, Timestamp: m.Timestamp, SN: m.SN}
+}
+
+func (m *Msg) Encode() (key, val []byte, err error) {
+	key, err = m.Key().Encode()
+	if err != nil {
+		return nil, nil, err
+	}
+	val = m.Raw
+	if len(val) >= 1024 {
+		buf := &bytes.Buffer{}
+		gzw := gzip.NewWriter(buf)
+		if _, err := gzw.Write(m.Raw); err != nil {
+			return nil, nil, err
+		}
+		if err := gzw.Close(); err != nil {
+			return nil, nil, err
+		}
+		val = buf.Bytes()
+	}
+	return
 }
