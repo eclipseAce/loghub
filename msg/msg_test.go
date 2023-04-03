@@ -1,9 +1,12 @@
 package msg
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
+	"strings"
 	"testing"
 	"time"
 )
@@ -28,12 +31,15 @@ func TestMsgKey(t *testing.T) {
 }
 
 func TestMsg(t *testing.T) {
-	msgLog := "2023-03-31 17:01:25 GpsDataService:35 - (40666464383)收到报文类型：512,报文内容：7e02004032010000000004066646438317ad00000000000c000302324edb071a817700080000014a2303311701240104000c34290302000025040000000030011b310112347e"
 
-	msg, err := DecodeLog(msgLog, 1)
+	b, err := io.ReadAll(
+		base64.NewDecoder(base64.StdEncoding, strings.NewReader(
+			"fgACAAABIYB1NpYdIEp+AAAADAACAXV9AggHCiK4ABMAAAEZIwQDFkMpAQQAAh/nAgIAAAMCAAAHAgAAFAQAAAAAFQQAAAAAFgQAAAAAFwIAABgCAAAlBAAAAAAqAgACKwQAAAAAMAFjMQEY7wEATX4=",
+			//"fgIAAGEBIYB1NpR7vQAAAAAADAACAXV9AggHCiK4ABMAAAEZIwQDFkMpAQQAAh/nAgIAAAMCAAAHAgAAFAQAAAAAFQQAAAAAFgQAAAAAFwIAABgCAAAlBAAAAAAqAgACKwQAAAAAMAFjMQEY7wEA"
+		)),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	fmt.Printf("%v\n", msg.SimNo)
+	fmt.Println(hex.EncodeToString(b))
 }

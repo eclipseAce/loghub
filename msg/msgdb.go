@@ -2,7 +2,6 @@ package msg
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"sync"
@@ -172,7 +171,6 @@ func (mdb *MsgDB) Query(simNo string, since, until time.Time, filter func(*Msg) 
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("since: %s, until: %s", hex.EncodeToString(sinceKey), hex.EncodeToString(untilKey))
 	results := make([]*Msg, 0)
 	if err := mdb.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
@@ -182,17 +180,18 @@ func (mdb *MsgDB) Query(simNo string, since, until time.Time, filter func(*Msg) 
 			if bytes.Compare(item.Key(), untilKey) > 0 {
 				break
 			}
-			if err := item.Value(func(val []byte) error {
-				m, err := DecodeEntry(item.Key(), val)
-				if err != nil {
-					return err
-				}
-				if filter == nil || filter(m) {
-					results = append(results, m)
-				}
-				return nil
-			}); err != nil {
-				log.Println(fmt.Errorf("db read value: %w", err))
+			val, err := item.ValueCopy(make([]byte, 0, item.ValueSize()))
+			if err != nil {
+				log.Println(fmt.Errorf("db valueCopy: %w", err))
+				continue
+			}
+			m, err := DecodeEntry(item.Key(), val)
+			if err != nil {
+				log.Println(fmt.Errorf("invalid msg: %w", err))
+				continue
+			}
+			if filter == nil || filter(m) {
+				results = append(results, m)
 			}
 		}
 		return nil
