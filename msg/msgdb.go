@@ -166,10 +166,7 @@ func (mdb *MsgDB) Close() error {
 }
 
 func (mdb *MsgDB) Query(simNo string, since, until time.Time, filter func(*Msg) bool) ([]*Msg, error) {
-	sinceKey, untilKey, err := EncodeKeyRange(simNo, since, until)
-	if err != nil {
-		return nil, err
-	}
+	sinceKey, untilKey := EncodeKeyRange(simNo, since, until)
 	results := make([]*Msg, 0)
 	if err := mdb.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
