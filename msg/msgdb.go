@@ -21,14 +21,14 @@ type MsgDB struct {
 	closeWait sync.WaitGroup
 }
 
-func NewMsgDB(path string, bulkSize uint) (mdb *MsgDB, err error) {
+func NewMsgDB(path string, vlfSize int64, bulkSize uint) (mdb *MsgDB, err error) {
 	callOnError := func(fn func() error) {
 		if err != nil {
 			fn()
 		}
 	}
 
-	db, err := badger.Open(badger.DefaultOptions(path))
+	db, err := badger.Open(badger.DefaultOptions(path).WithValueLogFileSize(vlfSize))
 	if err != nil {
 		return nil, err
 	}

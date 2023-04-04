@@ -16,6 +16,7 @@ type Msg struct {
 	SN        uint64
 	Raw       []byte
 	Timestamp time.Time
+	Warnings  []string
 
 	MsgID       uint16
 	MsgSN       uint16
@@ -25,12 +26,11 @@ type Msg struct {
 	PartTotal   uint16
 	PartIndex   uint16
 	Body        []byte
-	BadChecksum bool
-	BadBodyLen  bool
+	DecodedBody any
 }
 
 func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
-	m := &Msg{Timestamp: timestamp, SN: sn, Raw: raw}
+	m := &Msg{Timestamp: timestamp, SN: sn, Raw: raw, Warnings: make([]string, 0)}
 
 	// unescape
 	buf := new(bytes.Buffer)
@@ -54,7 +54,7 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 		checksum ^= b
 	}
 	if checksum != 0 {
-		m.BadChecksum = true
+		m.Warnings = append(m.Warnings, "bad checksum")
 	}
 
 	// read msg id
@@ -113,7 +113,7 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 	// read msg body
 	remain := buf.Len()
 	if int(attribute&0x03FF) != remain-1 {
-		m.BadBodyLen = true
+		m.Warnings = append(m.Warnings, "bad body length")
 	}
 	if remain > 1 {
 		m.Body = make([]byte, remain-1)
@@ -122,9 +122,16 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 		}
 	} else {
 		if remain == 0 {
-			m.BadChecksum = true
+			m.Warnings = append(m.Warnings, "missing checksum")
 		}
 		m.Body = []byte{}
+	}
+
+	switch m.MsgID {
+	case 0x0200:
+		if err := DecodeBody_0200(m); err != nil {
+			m.Warnings = append(m.Warnings, "bad 0200 msg body")
+		}
 	}
 
 	// last byte is checksum, ignore

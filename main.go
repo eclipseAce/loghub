@@ -16,6 +16,7 @@ func main() {
 	var opts struct {
 		DataDir      string `short:"d" long:"data-dir" default:"data" description:"Data file directory"`
 		BulkSize     uint   `short:"b" long:"bulk-size" default:"2000" description:"DB bulk set size"`
+		VLFSizeMB    uint   `short:"v" long:"vlf-size" default:"512" description:"DB value log file size, in MB"`
 		BindLogstash string `short:"l" long:"bind-logstash" default:":5044" description:"[host]:port Logstash bind address"`
 		BindWeb      string `short:"w" long:"bind-web" default:":6060" description:"[host]:port Web bind address"`
 	}
@@ -25,7 +26,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	db, err := msg.NewMsgDB(opts.DataDir, opts.BulkSize)
+	db, err := msg.NewMsgDB(opts.DataDir, int64(opts.VLFSizeMB)*1024*1024, opts.BulkSize)
 	if err != nil {
 		log.Fatalln(err)
 	}
