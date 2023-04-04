@@ -180,10 +180,7 @@ func (m *Msg) Key() *MsgKey {
 }
 
 func (m *Msg) Encode() (key, val []byte, err error) {
-	key, err = m.Key().Encode()
-	if err != nil {
-		return nil, nil, err
-	}
+	key = m.Key().Encode()
 	val = m.Raw
 	if len(val) >= 1024 {
 		buf := &bytes.Buffer{}
