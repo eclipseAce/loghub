@@ -103,7 +103,7 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 		}
 	} else {
 		m.PartTotal = 1
-		m.PartIndex = 0
+		m.PartIndex = 1
 	}
 
 	// read msg body

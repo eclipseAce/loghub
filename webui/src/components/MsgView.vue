@@ -2,8 +2,7 @@
     <div class="view-wrapper">
         <div class="view-options">
             <span class="view-option-label">消息ID</span>
-            <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked"
-                :label="msgId.value"></el-checkbox>
+            <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked" :label="msgId.value"></el-checkbox>
         </div>
         <el-table :data="visibleItems" height="100%" stripe size="mini">
             <el-table-column prop="Warnings" label="" width="32" align="center">
@@ -53,8 +52,6 @@ function base64ToHex(str) {
     return result.join(' ').toUpperCase()
 }
 
-
-
 function formatBits(val) {
     const bits = []
     for (let i = 0; i < 32; i++) {
@@ -83,9 +80,9 @@ export default {
                         Timestamp: moment(it.Timestamp).format(dateFormat),
                         MsgID: it.MsgID.toString(16).padStart(4, 0),
                         Version: it.Version == -1 ? '-' : it.Version,
-                        Part: `${it.PartIndex + 1}/${it.PartTotal}`,
+                        Part: `${it.PartIndex}/${it.PartTotal}`,
                         Raw: base64ToHex(it.Raw),
-                        Body: {}
+                        Body: {},
                     })
                     if (item.MsgID == '0200' && typeof it.Body === 'object') {
                         item.Body = Object.assign({}, it.Body, {
@@ -118,15 +115,26 @@ export default {
     },
     watch: {
         items(value) {
-            this.msgIds = []
+            const checked = {}
+            this.msgIds.forEach((it) => {
+                if (it.checked) {
+                    checked[it.value] = true
+                }
+            })
             const availables = {}
             value.forEach((it) => {
                 if (availables[it.MsgID]) {
                     return
                 }
                 availables[it.MsgID] = true
-                this.msgIds.push({ value: it.MsgID, checked: true })
+                this.msgIds.push({
+                    value: it.MsgID,
+                    checked: checked[it.MsgID] || false,
+                })
             })
+            this.msgIds = this.msgIds
+                .filter((it) => availables[it.value])
+                .sort((a, b) => a.MsgID.localeCompare(b.MsgID))
         },
     },
     methods: {},
@@ -146,7 +154,7 @@ export default {
     box-sizing: border-box;
     background-color: #fff;
 
-    &>.el-table {
+    & > .el-table {
         flex: 1 1;
     }
 
