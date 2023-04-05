@@ -2,7 +2,8 @@
     <div class="view-wrapper">
         <div class="view-options">
             <span class="view-option-label">消息ID</span>
-            <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked" :label="msgId.value"></el-checkbox>
+            <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked"
+                :label="msgId.value"></el-checkbox>
         </div>
         <el-table :data="visibleItems" height="100%" stripe size="mini">
             <el-table-column prop="Warnings" label="" width="32" align="center">
@@ -115,26 +116,22 @@ export default {
     },
     watch: {
         items(value) {
-            const checked = {}
+            const msgIdMap = {}
             this.msgIds.forEach((it) => {
-                if (it.checked) {
-                    checked[it.value] = true
-                }
+                msgIdMap[it.value] = it
             })
-            const availables = {}
+            const occurs = {}
             value.forEach((it) => {
-                if (availables[it.MsgID]) {
-                    return
+                let msgId = msgIdMap[it.MsgID]
+                if (!msgId) {
+                    msgId = { value: it.MsgID, checked: true }
+                    msgIdMap[msgId.value] = msgId
                 }
-                availables[it.MsgID] = true
-                this.msgIds.push({
-                    value: it.MsgID,
-                    checked: checked[it.MsgID] || false,
-                })
+                occurs[msgId.value] = true
             })
-            this.msgIds = this.msgIds
-                .filter((it) => availables[it.value])
-                .sort((a, b) => a.MsgID.localeCompare(b.MsgID))
+            this.msgIds = Object.values(msgIdMap)
+                .filter((it) => !!occurs[it.value])
+                .sort((a, b) => a.value.localeCompare(b.value))
         },
     },
     methods: {},
@@ -154,7 +151,7 @@ export default {
     box-sizing: border-box;
     background-color: #fff;
 
-    & > .el-table {
+    &>.el-table {
         flex: 1 1;
     }
 
