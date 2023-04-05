@@ -2,28 +2,38 @@
     <div class="view-wrapper">
         <div class="view-options">
             <span class="view-option-label">消息ID</span>
-            <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked" :label="msgId.value"></el-checkbox>
+            <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked"
+                :label="msgId.value"></el-checkbox>
         </div>
-        <el-table :data="filteredItems" height="100%" stripe size="mini">
-            <el-table-column prop="timestamp" label="时间戳" width="160" align="center"></el-table-column>
-            <el-table-column prop="simNo" label="SIM卡号" width="160" align="right"></el-table-column>
-            <el-table-column prop="msgId" label="消息ID" width="80" align="center"></el-table-column>
-            <el-table-column prop="msgSn" label="消息SN" width="80" align="right"></el-table-column>
-            <el-table-column prop="version" label="消息版本" width="80" align="right"></el-table-column>
-            <el-table-column prop="split" label="分包" width="80" align="right"></el-table-column>
-            <el-table-column prop="raw" label="原始消息">
-                <template slot-scope="{ row: { raw, warnings } }">
-                    <div style="line-height: 16px">
-                        <span style="vertical-align: middle">{{ raw }}</span>
-                        <el-tooltip v-if="warnings.length !== 0" effect="dark" placement="left">
-                            <i class="el-icon-warning" style="color: #f56c6c; font-size: 16px; vertical-align: middle; margin-right: 4px"></i>
-                            <template slot="content">
-                                <div v-for="(warning, i) in warnings" :key="i">{{ warning }}</div>
-                            </template>
-                        </el-tooltip>
-                    </div>
+        <el-table :data="visibleItems" height="100%" stripe size="mini">
+            <el-table-column prop="Warnings" label="" width="32" align="center">
+                <template slot-scope="{ row: { Warnings } }">
+                    <el-tooltip v-if="Warnings.length !== 0" effect="dark" placement="right">
+                        <i class="el-icon-warning warning-icon"></i>
+                        <template slot="content">
+                            <div v-for="(warning, i) in Warnings" :key="i" style="font-size: 14px">{{ warning }}</div>
+                        </template>
+                    </el-tooltip>
                 </template>
             </el-table-column>
+            <el-table-column prop="Timestamp" label="时间戳" width="160" align="center"></el-table-column>
+            <el-table-column prop="SimNo" label="SIM卡号" width="100" align="right"></el-table-column>
+            <el-table-column prop="MsgID" label="ID" width="60" align="right"></el-table-column>
+            <el-table-column prop="MsgSN" label="SN" width="60" align="right"></el-table-column>
+            <el-table-column prop="Version" label="版本" width="60" align="right"></el-table-column>
+            <el-table-column prop="Part" label="分包" width="60" align="right"></el-table-column>
+
+            <template v-if="viewMode == '0200'">
+                <el-table-column prop="Body.Time" label="定位时间" width="160" align="center"></el-table-column>
+                <el-table-column prop="Body.Alarm" label="报警位" width="200" align="right"></el-table-column>
+                <el-table-column prop="Body.Status" label="状态位" width="200" align="right"></el-table-column>
+                <el-table-column prop="Body.Lnglat" label="经纬度" width="200" align="right"></el-table-column>
+                <el-table-column prop="Body.Altitude" label="海拔(m)" width="100" align="right"></el-table-column>
+                <el-table-column prop="Body.Speed" label="速度(km/h)" width="100" align="right"></el-table-column>
+                <el-table-column prop="Body.Direction" label="航向(°)" width="100" align="right"></el-table-column>
+            </template>
+
+            <el-table-column v-if="viewMode == 'ALL'" prop="Raw" label="数据"></el-table-column>
         </el-table>
     </div>
 </template>
@@ -35,12 +45,24 @@ const dateFormat = 'YYYY-MM-DD HH:mm:ss'
 
 function base64ToHex(str) {
     const raw = atob(str)
-    let result = ''
+    let result = []
     for (let i = 0; i < raw.length; i++) {
         const hex = raw.charCodeAt(i).toString(16)
-        result += hex.length === 2 ? hex : '0' + hex
+        result.push(hex.length === 2 ? hex : '0' + hex)
     }
-    return result.toUpperCase()
+    return result.join(' ').toUpperCase()
+}
+
+
+
+function formatBits(val) {
+    const bits = []
+    for (let i = 0; i < 32; i++) {
+        if (val & (1 << i)) {
+            bits.push(i + 1)
+        }
+    }
+    return bits.length === 0 ? '-' : bits.join(',')
 }
 
 export default {
@@ -55,34 +77,54 @@ export default {
     },
     computed: {
         items() {
-            return this.data.map((it) => ({
-                simNo: it.SimNo,
-                timestamp: moment(it.Timestamp).format(dateFormat),
-                msgId: it.MsgID.toString(16).padStart(4, 0),
-                msgSn: it.MsgSN,
-                version: it.Version == -1 ? '-' : it.Version,
-                split: `${it.PartIndex + 1}/${it.PartTotal}`,
-                warnings: it.Warnings,
-                raw: base64ToHex(it.Raw),
-            })).reverse()
+            return this.data
+                .map((it) => {
+                    const item = Object.assign({}, it, {
+                        Timestamp: moment(it.Timestamp).format(dateFormat),
+                        MsgID: it.MsgID.toString(16).padStart(4, 0),
+                        Version: it.Version == -1 ? '-' : it.Version,
+                        Part: `${it.PartIndex + 1}/${it.PartTotal}`,
+                        Raw: base64ToHex(it.Raw),
+                        Body: {}
+                    })
+                    if (item.MsgID == '0200' && typeof it.Body === 'object') {
+                        item.Body = Object.assign({}, it.Body, {
+                            Alarm: formatBits(it.Body.Alarm),
+                            Status: formatBits(it.Body.Status),
+                            Lnglat: `${it.Body.Longitude.toFixed(6)},${it.Body.Latitude.toFixed(6)}`,
+                            Speed: `${it.Body.Speed.toFixed(1)}`,
+                            Time: moment(it.Body.Time).format(dateFormat),
+                        })
+                    }
+                    return item
+                })
+                .reverse()
         },
-        filteredItems() {
-            const visibles = this.msgIds.filter((it) => it.checked).map((it) => it.value)
+        visibleItems() {
             return this.items.filter((it) => {
-                return visibles.indexOf(it.msgId) != -1
+                return this.visibleMsgIds.indexOf(it.MsgID) != -1
             })
+        },
+        visibleMsgIds() {
+            return this.msgIds.filter((it) => it.checked).map((it) => it.value)
+        },
+        viewMode() {
+            if (this.visibleMsgIds.length == 1 && this.visibleMsgIds[0] == '0200') {
+                return '0200'
+            }
+            return 'ALL'
         },
     },
     watch: {
         items(value) {
-            const map = {}
             this.msgIds = []
+            const availables = {}
             value.forEach((it) => {
-                if (map[it.msgId]) {
+                if (availables[it.MsgID]) {
                     return
                 }
-                map[it.msgId] = true
-                this.msgIds.push({ value: it.msgId, checked: true })
+                availables[it.MsgID] = true
+                this.msgIds.push({ value: it.MsgID, checked: true })
             })
         },
     },
@@ -98,15 +140,21 @@ export default {
     justify-content: center;
     align-items: flex-start;
     height: 100%;
+    width: 100%;
+    border: 1px solid #ddd;
+    box-sizing: border-box;
+    background-color: #fff;
 
-    & > .el-table {
+    &>.el-table {
         flex: 1 1;
     }
+
     .el-table__row {
         font-family: monospace;
         font-size: 14px;
     }
 }
+
 .view-options {
     display: flex;
     align-items: center;
@@ -121,5 +169,12 @@ export default {
         color: #666;
         margin-right: 16px;
     }
+}
+
+.warning-icon {
+    color: #f56c6c;
+    font-size: 20px;
+    vertical-align: middle;
+    line-height: 20px;
 }
 </style>

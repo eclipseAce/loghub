@@ -21,14 +21,14 @@ type MsgDB struct {
 	closeWait sync.WaitGroup
 }
 
-func NewMsgDB(path string, vlfSize int64, bulkSize uint) (mdb *MsgDB, err error) {
+func NewMsgDB(path string, bulkSize uint) (mdb *MsgDB, err error) {
 	callOnError := func(fn func() error) {
 		if err != nil {
 			fn()
 		}
 	}
 
-	db, err := badger.Open(badger.DefaultOptions(path).WithValueLogFileSize(vlfSize))
+	db, err := badger.Open(badger.DefaultOptions(path).WithZSTDCompressionLevel(3))
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,10 @@ func (mdb *MsgDB) Close() error {
 }
 
 func (mdb *MsgDB) Query(simNo string, since, until time.Time, filter func(*Msg) bool) ([]*Msg, error) {
-	sinceKey, untilKey := EncodeKeyRange(simNo, since, until)
+	sinceKey, untilKey, err := EncodeKeyRange(simNo, since, until)
+	if err != nil {
+		return nil, err
+	}
 	results := make([]*Msg, 0)
 	if err := mdb.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)

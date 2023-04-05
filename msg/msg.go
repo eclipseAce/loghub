@@ -2,11 +2,9 @@ package msg
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"regexp"
 	"strings"
 	"time"
@@ -16,17 +14,15 @@ type Msg struct {
 	SN        uint64
 	Raw       []byte
 	Timestamp time.Time
+	MsgID     uint16
+	MsgSN     uint16
+	SimNo     string
+	Version   int16
+	Encrypted bool
+	PartTotal uint16
+	PartIndex uint16
+	Body      any
 	Warnings  []string
-
-	MsgID       uint16
-	MsgSN       uint16
-	SimNo       string
-	Version     int16
-	Encrypted   bool
-	PartTotal   uint16
-	PartIndex   uint16
-	Body        []byte
-	DecodedBody any
 }
 
 func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
@@ -115,23 +111,29 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 	if int(attribute&0x03FF) != remain-1 {
 		m.Warnings = append(m.Warnings, "bad body length")
 	}
+	var body []byte
 	if remain > 1 {
-		m.Body = make([]byte, remain-1)
-		if err := binary.Read(buf, binary.BigEndian, m.Body); err != nil {
+		body = make([]byte, remain-1)
+		if err := binary.Read(buf, binary.BigEndian, body); err != nil {
 			return nil, fmt.Errorf("invalid msgBody: %w", err)
 		}
 	} else {
+		body = []byte{}
 		if remain == 0 {
 			m.Warnings = append(m.Warnings, "missing checksum")
 		}
-		m.Body = []byte{}
 	}
 
+	var err error
 	switch m.MsgID {
 	case 0x0200:
-		if err := DecodeBody_0200(m); err != nil {
-			m.Warnings = append(m.Warnings, "bad 0200 msg body")
-		}
+		m.Body, err = DecodeBody_0200(body)
+	default:
+		m.Body = body
+	}
+	if err != nil {
+		m.Warnings = append(m.Warnings, "bad msg body")
+		m.Body = body
 	}
 
 	// last byte is checksum, ignore
@@ -169,16 +171,6 @@ func DecodeEntry(key, val []byte) (*Msg, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(val) >= 2 && val[0] == 0x1F && val[1] == 0x8B {
-		gzr, err := gzip.NewReader(bytes.NewReader(val))
-		if err != nil {
-			return nil, fmt.Errorf("invalid gzip: %w", err)
-		}
-		val, err = io.ReadAll(gzr)
-		if err != nil {
-			return nil, fmt.Errorf("read gzip: %w", err)
-		}
-	}
 	return Decode(val, mk.Timestamp, mk.SN)
 }
 
@@ -187,18 +179,10 @@ func (m *Msg) Key() *MsgKey {
 }
 
 func (m *Msg) Encode() (key, val []byte, err error) {
-	key = m.Key().Encode()
-	val = m.Raw
-	if len(val) >= 1024 {
-		buf := &bytes.Buffer{}
-		gzw := gzip.NewWriter(buf)
-		if _, err := gzw.Write(m.Raw); err != nil {
-			return nil, nil, fmt.Errorf("write gzip: %w", err)
-		}
-		if err := gzw.Close(); err != nil {
-			return nil, nil, fmt.Errorf("close gzip: %w", err)
-		}
-		val = buf.Bytes()
+	key, err = m.Key().Encode()
+	if err != nil {
+		return nil, nil, err
 	}
+	val = m.Raw
 	return
 }
