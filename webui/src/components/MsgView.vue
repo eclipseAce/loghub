@@ -95,6 +95,7 @@ export default {
                             Speed: `${it.Body.Speed.toFixed(1)}`,
                             Time: moment(it.Body.Time).format(dateFormat),
                         })
+                        item.Warnings = item.Warnings.concat(item.Body.Warnings)
                     }
                     return item
                 })
