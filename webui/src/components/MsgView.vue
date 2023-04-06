@@ -159,7 +159,7 @@ export default {
         font-family: monospace;
         font-size: 13px;
         font-weight: 500;
-        word-break: normal;
+        word-break: normal !important;
     }
     ::v-deep .el-table__cell {
         padding: 2px 0;
