@@ -8,11 +8,12 @@ import (
 	"os"
 	"os/signal"
 
+	_ "net/http/pprof"
+
 	"github.com/jessevdk/go-flags"
 )
 
 func main() {
-
 	var opts struct {
 		DataDir      string `short:"d" long:"data-dir" default:"data" description:"Data file directory"`
 		BulkSize     uint   `short:"b" long:"bulk-size" default:"2000" description:"DB bulk set size"`
