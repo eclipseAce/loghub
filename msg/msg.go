@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -11,8 +12,8 @@ import (
 )
 
 type Msg struct {
-	SN        uint64
 	Raw       []byte
+	Flags     MsgFlags
 	Timestamp time.Time
 	MsgID     uint16
 	MsgSN     uint16
@@ -25,8 +26,24 @@ type Msg struct {
 	Warnings  []string
 }
 
-func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
-	m := &Msg{Timestamp: timestamp, SN: sn, Raw: raw, Warnings: make([]string, 0)}
+const (
+	MsgAttr_Tx = 1
+)
+
+var (
+	ErrEmptyMsg = errors.New("empty msg")
+	ErrBadMsg   = errors.New("bad msg")
+)
+
+func Decode(raw []byte, flags MsgFlags, timestamp time.Time) (*Msg, error) {
+	m := &Msg{Flags: flags, Timestamp: timestamp, Raw: raw, Warnings: make([]string, 0)}
+
+	if len(raw) < 2 || raw[0] != 0x7E || raw[len(raw)-1] != 0x7E {
+		return nil, ErrBadMsg
+	}
+	if len(raw) == 2 {
+		return nil, ErrEmptyMsg
+	}
 
 	// unescape
 	buf := new(bytes.Buffer)
@@ -140,14 +157,12 @@ func Decode(raw []byte, timestamp time.Time, sn uint64) (*Msg, error) {
 	return m, nil
 }
 
-var logPattern = regexp.MustCompile(
-	`^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) GpsDataService:\d+ - \([0-9A-F]+\)收到报文类型：\d+,报文内容：(?P<payload>[a-f0-9]+)$`,
-)
+var logPattern = regexp.MustCompile(`^(?P<timestamp>\d{14}) (?P<xfer>Rx|Tx) (?P<payload>[a-f0-9]+)$`)
 
-func DecodeLog(log string, sn uint64) (*Msg, error) {
+func DecodeLog(log string, ds uint8, sn uint32) (*Msg, error) {
 	matches := logPattern.FindStringSubmatch(log)
 	if matches == nil {
-		return nil, fmt.Errorf("invalid log: %s", log)
+		return nil, errors.New("invalid log format")
 	}
 	fields := make(map[string]string)
 	for i, name := range logPattern.SubexpNames() {
@@ -155,7 +170,7 @@ func DecodeLog(log string, sn uint64) (*Msg, error) {
 			fields[name] = matches[i]
 		}
 	}
-	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", fields["timestamp"], time.Local)
+	timestamp, err := time.ParseInLocation("20060102150405", fields["timestamp"], time.Local)
 	if err != nil {
 		return nil, fmt.Errorf("invalid log timestamp: %w", err)
 	}
@@ -163,7 +178,12 @@ func DecodeLog(log string, sn uint64) (*Msg, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid log payload: %w", err)
 	}
-	return Decode(payload, timestamp, sn)
+	var attr uint8
+	if fields["xfer"] == "Tx" {
+		attr |= MsgAttr_Tx
+	}
+	flags := NewMsgFlags(attr, ds, sn)
+	return Decode(payload, flags, timestamp)
 }
 
 func DecodeEntry(key, val []byte) (*Msg, error) {
@@ -171,11 +191,11 @@ func DecodeEntry(key, val []byte) (*Msg, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Decode(val, mk.Timestamp, mk.SN)
+	return Decode(val, mk.Flags, mk.Timestamp)
 }
 
 func (m *Msg) Key() *MsgKey {
-	return &MsgKey{SimNo: m.SimNo, Timestamp: m.Timestamp, SN: m.SN}
+	return &MsgKey{SimNo: m.SimNo, Timestamp: m.Timestamp, Flags: m.Flags}
 }
 
 func (m *Msg) Encode() (key, val []byte, err error) {

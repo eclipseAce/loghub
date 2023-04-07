@@ -2,8 +2,10 @@ package msg
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -83,8 +85,11 @@ func (mdb *MsgDB) receiveTask(s server.Server) {
 		select {
 		case batch := <-recvChan:
 			for _, event := range batch.Events {
-				if err := mdb.handleEvent(event); err != nil {
-					log.Println(fmt.Errorf("handleEvent: %w", err))
+				data := event.(map[string]any)
+				eventMsg := strings.Trim(data["message"].(string), "\x00\r\n\t ")
+				if err := mdb.handleEventMsg(eventMsg); err != nil {
+					b, _ := json.Marshal(eventMsg)
+					log.Println(fmt.Errorf("handleLogEvent: %w: %s", err, string(b)))
 				}
 				atomic.AddUint64(&mdb.counter, 1)
 			}
@@ -96,27 +101,31 @@ func (mdb *MsgDB) receiveTask(s server.Server) {
 }
 
 func (mdb *MsgDB) statTask() {
+	interval := 10
 	mdb.closeWait.Add(1)
 	defer mdb.closeWait.Done()
-	tk := time.NewTicker(time.Second)
+	tk := time.NewTicker(time.Duration(interval * int(time.Second)))
 	defer tk.Stop()
 	for {
 		select {
 		case <-tk.C:
-			log.Printf("messages received last second: %d", atomic.SwapUint64(&mdb.counter, 0))
+			log.Printf("messages rate: %.2f/s", float64(atomic.SwapUint64(&mdb.counter, 0))/float64(interval))
 		case <-mdb.closeChan:
 			return
 		}
 	}
 }
 
-func (mdb *MsgDB) handleEvent(event any) error {
+func (mdb *MsgDB) handleEventMsg(eventMsg string) error {
 	sn, err := mdb.seq.Next()
 	if err != nil {
 		return err
 	}
-	m, err := DecodeLog(event.(map[string]any)["message"].(string), sn)
+	m, err := DecodeLog(eventMsg, 0, uint32(sn))
 	if err != nil {
+		if err == ErrEmptyMsg {
+			return nil // for empty msg (just two 0x7E), ignore
+		}
 		return err
 	}
 	key, val, err := m.Encode()

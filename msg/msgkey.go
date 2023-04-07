@@ -11,8 +11,8 @@ import (
 
 type MsgKey struct {
 	SimNo     string
+	Flags     MsgFlags
 	Timestamp time.Time
-	SN        uint64
 }
 
 func DecodeKey(b []byte) (*MsgKey, error) {
@@ -22,7 +22,7 @@ func DecodeKey(b []byte) (*MsgKey, error) {
 	return &MsgKey{
 		SimNo:     strings.TrimLeft(hex.EncodeToString(b[:10]), "0"),
 		Timestamp: time.Unix(int64(binary.BigEndian.Uint64(b[10:10+8])), 0),
-		SN:        binary.BigEndian.Uint64(b[10+8:]),
+		Flags:     MsgFlags(binary.BigEndian.Uint64(b[10+8:])),
 	}, nil
 }
 
@@ -34,13 +34,13 @@ func (mk *MsgKey) Encode() ([]byte, error) {
 	b := make([]byte, 10+8+8)
 	copy(b, simNo)
 	binary.BigEndian.PutUint64(b[10:], uint64(mk.Timestamp.UTC().Unix()))
-	binary.BigEndian.PutUint64(b[10+8:], mk.SN)
+	binary.BigEndian.PutUint64(b[10+8:], uint64(mk.Flags))
 	return b, nil
 }
 
 func EncodeKeyRange(simNo string, since, until time.Time) (sinceKey, untilKey []byte, err error) {
-	sk := &MsgKey{SimNo: simNo, Timestamp: since, SN: uint64(0)}
-	uk := &MsgKey{SimNo: simNo, Timestamp: until, SN: ^uint64(0)}
+	sk := &MsgKey{SimNo: simNo, Timestamp: since, Flags: MsgFlags(0)}
+	uk := &MsgKey{SimNo: simNo, Timestamp: until, Flags: ^MsgFlags(0)}
 	if sinceKey, err = sk.Encode(); err != nil {
 		return nil, nil, err
 	}

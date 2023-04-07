@@ -1,19 +1,32 @@
 <template>
     <div class="view-wrapper">
         <div class="view-options">
-            <span class="view-option-label">消息ID</span>
-            <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked"
-                :label="msgId.value"></el-checkbox>
+            <div class="view-options-item">
+                <span class="view-option-label">消息传输</span>
+                <el-checkbox v-model="msgXfer.rx" label="上行"></el-checkbox>
+                <el-checkbox v-model="msgXfer.tx" label="下行"></el-checkbox>
+            </div>
+            <div class="view-options-item">
+                <span class="view-option-label">消息ID</span>
+                <el-checkbox :value="allMsgIdsChecked" @input="checkAllMsgIds" label="全部"></el-checkbox>
+                <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked" :label="msgId.value"></el-checkbox>
+            </div>
         </div>
         <el-table :data="visibleItems" height="100%" stripe size="mini">
             <el-table-column prop="Warnings" label="" width="32" align="center">
                 <template slot-scope="{ row: { Warnings } }">
                     <el-tooltip v-if="Warnings.length !== 0" effect="dark" placement="right">
-                        <i class="el-icon-warning warning-icon"></i>
+                        <i class="el-icon-warning table-row-icon" style="color: #f56c6c"></i>
                         <template slot="content">
                             <div v-for="(warning, i) in Warnings" :key="i" style="font-size: 14px">{{ warning }}</div>
                         </template>
                     </el-tooltip>
+                </template>
+            </el-table-column>
+            <el-table-column prop="Xfer" label="" width="32" align="center">
+                <template slot-scope="{ row: { Flags } }">
+                    <i v-if="!Flags.Tx" class="el-icon-d-arrow-right table-row-icon" style="color: #67c23a"></i>
+                    <i v-else class="el-icon-d-arrow-left table-row-icon" style="color: #e6a23c"></i>
                 </template>
             </el-table-column>
             <el-table-column prop="Timestamp" label="时间戳" width="160" align="center"></el-table-column>
@@ -71,6 +84,10 @@ export default {
     data() {
         return {
             msgIds: [],
+            msgXfer: {
+                rx: true,
+                tx: true,
+            },
         }
     },
     computed: {
@@ -78,6 +95,9 @@ export default {
             return this.data
                 .map((it) => {
                     const item = Object.assign({}, it, {
+                        Flags: {
+                            Tx: it.Flags & (0x01 << 48) == 1
+                        },
                         Timestamp: moment(it.Timestamp).format(dateFormat),
                         MsgID: it.MsgID.toString(16).padStart(4, 0),
                         Version: it.Version == -1 ? '-' : it.Version,
@@ -101,11 +121,17 @@ export default {
         },
         visibleItems() {
             return this.items.filter((it) => {
+                if ((it.Flags.Tx && !this.msgXfer.tx) || (!it.Flags.Tx && !this.msgXfer.rx)) {
+                    return false
+                }
                 return this.visibleMsgIds.indexOf(it.MsgID) != -1
             })
         },
         visibleMsgIds() {
             return this.msgIds.filter((it) => it.checked).map((it) => it.value)
+        },
+        allMsgIdsChecked() {
+            return this.msgIds.every((it) => it.checked)
         },
         viewMode() {
             if (this.visibleMsgIds.length == 1 && this.visibleMsgIds[0] == '0200') {
@@ -134,7 +160,11 @@ export default {
                 .sort((a, b) => a.value.localeCompare(b.value))
         },
     },
-    methods: {},
+    methods: {
+        checkAllMsgIds(val) {
+            this.msgIds.forEach((it) => (it.checked = val))
+        },
+    },
 }
 </script>
 
@@ -151,7 +181,7 @@ export default {
     box-sizing: border-box;
     background-color: #fff;
 
-    &>.el-table {
+    & > .el-table {
         flex: 1 1;
     }
 
@@ -174,16 +204,18 @@ export default {
     height: 32px;
     padding: 0 8px;
     border-bottom: 1px solid #ddd;
-
-    .view-option-label {
-        font-size: 14px;
-        color: #666;
-        margin-right: 16px;
-    }
 }
-
-.warning-icon {
-    color: #f56c6c;
+.view-options-item + .view-options-item {
+    margin-left: 16px;
+    padding-left: 16px;
+    border-left: 2px solid #ddd;
+}
+.view-option-label {
+    font-size: 14px;
+    color: #666;
+    margin-right: 16px;
+}
+.table-row-icon {
     font-size: 20px;
     vertical-align: middle;
     line-height: 20px;
