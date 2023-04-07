@@ -1,28 +1,32 @@
 <template>
     <div class="view-wrapper">
         <div class="view-options">
-            <div class="view-options-item">
+            <div class="view-options-item" style="width: 240px">
                 <span class="view-option-label">消息传输</span>
-                <el-checkbox v-model="msgXfer.rx" label="上行"></el-checkbox>
-                <el-checkbox v-model="msgXfer.tx" label="下行"></el-checkbox>
+                <div class="view-option-content">
+                    <el-checkbox v-model="msgXfer.rx" label="上行"></el-checkbox>
+                    <el-checkbox v-model="msgXfer.tx" label="下行"></el-checkbox>
+                </div>
             </div>
-            <div class="view-options-item">
+            <div class="view-options-item" style="flex: 1 1">
                 <span class="view-option-label">消息ID</span>
-                <el-checkbox :value="allMsgIdsChecked" @input="checkAllMsgIds" label="全部"></el-checkbox>
-                <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked" :label="msgId.value"></el-checkbox>
+                <div class="view-option-content">
+                    <el-checkbox :value="allMsgIdsChecked" @input="checkAllMsgIds" label="全部"></el-checkbox>
+                    <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked" :label="msgId.value"></el-checkbox>
+                </div>
             </div>
+            <el-pagination
+                class="view-options-item"
+                align="right"
+                @size-change="onPageSizeChange"
+                @current-change="onPageCurrentChange"
+                :current-page="page.current"
+                :page-size="page.size"
+                :page-sizes="[50, 100, 200, 500]"
+                layout="prev, pager, next, jumper, sizes, total"
+                :total="filterItems.length"
+            ></el-pagination>
         </div>
-
-        <el-pagination
-            align="right"
-            @size-change="onPageSizeChange"
-            @current-change="onPageCurrentChange"
-            :current-page="page.current"
-            :page-size="page.size"
-            :page-sizes="[50, 100, 200, 500]"
-            layout="prev, pager, next, jumper, sizes, total"
-            :total="filterItems.length"
-        ></el-pagination>
 
         <el-table :data="pageItems" height="100%" stripe size="mini">
             <el-table-column type="index" width="60" :index="getPageItemIndex" align="right"></el-table-column>
@@ -161,6 +165,9 @@ export default {
         },
     },
     watch: {
+        data() {
+            this.page.current = 1
+        },
         items(value) {
             const msgIdMap = {}
             this.msgIds.forEach((it) => {
@@ -193,7 +200,7 @@ export default {
         },
         getPageItemIndex(index) {
             return (this.page.current - 1) * this.page.size + index + 1
-        }
+        },
     },
 }
 </script>
@@ -228,31 +235,34 @@ export default {
 
 .view-options {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     box-sizing: border-box;
     width: 100%;
-    height: 32px;
-    padding: 0 8px;
+    padding: 8px 8px;
     border-bottom: 1px solid #ddd;
 }
-.view-options-item + .view-options-item {
-    margin-left: 16px;
-    padding-left: 16px;
-    border-left: 2px solid #ddd;
+.view-options-item {
+    display: flex;
+    align-items: center;
+
+    & + .view-options-item {
+        margin-left: 16px;
+        padding-left: 16px;
+        border-left: 2px solid #ddd;
+    }
 }
 .view-option-label {
     font-size: 14px;
     color: #666;
     margin-right: 16px;
+    white-space: nowrap;
+}
+.view-option-content .el-checkbox {
+    vertical-align: middle;
 }
 .table-row-icon {
     font-size: 20px;
     vertical-align: middle;
     line-height: 20px;
-}
-.el-pagination {
-    width: 100%;
-    border-bottom: 1px solid #ddd;
-    box-sizing: border-box;
 }
 </style>

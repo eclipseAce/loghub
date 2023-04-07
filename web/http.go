@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,6 +16,8 @@ func init() {
 
 func Serve(bind string, db *msg.MsgDB) {
 	r := gin.Default()
+
+	r.Use(gzip.Gzip(gzip.DefaultCompression))
 
 	r.StaticFS("/ui", http.FS(webui.Assets()))
 
