@@ -28,7 +28,7 @@
             ></el-pagination>
         </div>
 
-        <el-table :data="pageItems" height="100%" stripe size="mini">
+        <el-table :data="pageItems" height="100%" stripe size="mini" style="flex: 1 1">
             <el-table-column type="index" width="60" :index="getPageItemIndex" align="right"></el-table-column>
             <el-table-column prop="Warnings" label="" width="32" align="center">
                 <template slot-scope="{ row: { Warnings } }">
@@ -217,19 +217,16 @@ export default {
     border: 1px solid #ddd;
     box-sizing: border-box;
     background-color: #fff;
+}
 
-    & > .el-table {
-        flex: 1 1;
-    }
+::v-deep .el-table__cell {
+    padding: 2px 0;
 
-    ::v-deep .el-table__row > .cell {
+    & > .cell {
         font-family: monospace;
         font-size: 13px;
         font-weight: 500;
         word-break: normal !important;
-    }
-    ::v-deep .el-table__cell {
-        padding: 2px 0;
     }
 }
 
