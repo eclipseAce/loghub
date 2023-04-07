@@ -26,10 +26,6 @@ type Msg struct {
 	Warnings  []string
 }
 
-const (
-	MsgAttr_Tx = 1
-)
-
 var (
 	ErrEmptyMsg = errors.New("empty msg")
 	ErrBadMsg   = errors.New("bad msg")

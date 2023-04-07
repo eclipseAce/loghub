@@ -18,7 +18,7 @@
                 <el-button type="primary" @click="onQuery">查询</el-button>
             </el-form-item>
         </el-form>
-        <MsgView :data="data" style="margin-top: 4px;" />
+        <MsgView :data="data" v-loading="loading" style="margin-top: 4px;" />
     </div>
 </template>
 

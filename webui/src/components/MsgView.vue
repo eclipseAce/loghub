@@ -12,7 +12,20 @@
                 <el-checkbox v-for="msgId in msgIds" :key="msgId.value" v-model="msgId.checked" :label="msgId.value"></el-checkbox>
             </div>
         </div>
-        <el-table :data="visibleItems" height="100%" stripe size="mini">
+
+        <el-pagination
+            align="right"
+            @size-change="onPageSizeChange"
+            @current-change="onPageCurrentChange"
+            :current-page="page.current"
+            :page-size="page.size"
+            :page-sizes="[50, 100, 200, 500]"
+            layout="prev, pager, next, jumper, sizes, total"
+            :total="filterItems.length"
+        ></el-pagination>
+
+        <el-table :data="pageItems" height="100%" stripe size="mini">
+            <el-table-column type="index" width="60" :index="getPageItemIndex" align="right"></el-table-column>
             <el-table-column prop="Warnings" label="" width="32" align="center">
                 <template slot-scope="{ row: { Warnings } }">
                     <el-tooltip v-if="Warnings.length !== 0" effect="dark" placement="right">
@@ -25,7 +38,7 @@
             </el-table-column>
             <el-table-column prop="Xfer" label="" width="32" align="center">
                 <template slot-scope="{ row: { Flags } }">
-                    <i v-if="!Flags.Tx" class="el-icon-d-arrow-right table-row-icon" style="color: #67c23a"></i>
+                    <i v-if="!Flags.TX" class="el-icon-d-arrow-right table-row-icon" style="color: #67c23a"></i>
                     <i v-else class="el-icon-d-arrow-left table-row-icon" style="color: #e6a23c"></i>
                 </template>
             </el-table-column>
@@ -88,43 +101,50 @@ export default {
                 rx: true,
                 tx: true,
             },
+            page: {
+                current: 1,
+                size: 100,
+            },
         }
     },
     computed: {
         items() {
             return this.data
                 .map((it) => {
-                    const item = Object.assign({}, it, {
-                        Flags: {
-                            Tx: it.Flags & (0x01 << 48) == 1
-                        },
-                        Timestamp: moment(it.Timestamp).format(dateFormat),
+                    return Object.assign({}, it, {
                         MsgID: it.MsgID.toString(16).padStart(4, 0),
-                        Version: it.Version == -1 ? '-' : it.Version,
-                        Part: `${it.PartIndex}/${it.PartTotal}`,
-                        Raw: base64ToHex(it.Raw),
-                        Body: {},
                     })
-                    if (item.MsgID == '0200' && typeof it.Body === 'object') {
-                        item.Body = Object.assign({}, it.Body, {
-                            Alarm: formatBits(it.Body.Alarm),
-                            Status: formatBits(it.Body.Status),
-                            Lnglat: `${it.Body.Longitude.toFixed(6)},${it.Body.Latitude.toFixed(6)}`,
-                            Speed: `${it.Body.Speed.toFixed(1)}`,
-                            Time: moment(it.Body.Time).format(dateFormat),
-                        })
-                        item.Warnings = item.Warnings.concat(item.Body.Warnings)
-                    }
-                    return item
                 })
                 .reverse()
         },
-        visibleItems() {
+        filterItems() {
             return this.items.filter((it) => {
-                if ((it.Flags.Tx && !this.msgXfer.tx) || (!it.Flags.Tx && !this.msgXfer.rx)) {
+                if ((it.Flags.TX && !this.msgXfer.tx) || (!it.Flags.TX && !this.msgXfer.rx)) {
                     return false
                 }
                 return this.visibleMsgIds.indexOf(it.MsgID) != -1
+            })
+        },
+        pageItems() {
+            return this.filterItems.slice((this.page.current - 1) * this.page.size, this.page.current * this.page.size).map((it) => {
+                const item = Object.assign({}, it, {
+                    Timestamp: moment(it.Timestamp).format(dateFormat),
+                    Version: it.Version == -1 ? '-' : it.Version,
+                    Part: `${it.PartIndex}/${it.PartTotal}`,
+                    Raw: base64ToHex(it.Raw),
+                    Body: {},
+                })
+                if (item.MsgID == '0200' && typeof it.Body === 'object') {
+                    item.Body = Object.assign({}, it.Body, {
+                        Alarm: formatBits(it.Body.Alarm),
+                        Status: formatBits(it.Body.Status),
+                        Lnglat: `${it.Body.Longitude.toFixed(6)},${it.Body.Latitude.toFixed(6)}`,
+                        Speed: `${it.Body.Speed.toFixed(1)}`,
+                        Time: moment(it.Body.Time).format(dateFormat),
+                    })
+                    item.Warnings = item.Warnings.concat(item.Body.Warnings)
+                }
+                return item
             })
         },
         visibleMsgIds() {
@@ -164,6 +184,16 @@ export default {
         checkAllMsgIds(val) {
             this.msgIds.forEach((it) => (it.checked = val))
         },
+        onPageSizeChange(val) {
+            this.page.current = 1
+            this.page.size = val
+        },
+        onPageCurrentChange(val) {
+            this.page.current = val
+        },
+        getPageItemIndex(index) {
+            return (this.page.current - 1) * this.page.size + index + 1
+        }
     },
 }
 </script>
@@ -219,5 +249,10 @@ export default {
     font-size: 20px;
     vertical-align: middle;
     line-height: 20px;
+}
+.el-pagination {
+    width: 100%;
+    border-bottom: 1px solid #ddd;
+    box-sizing: border-box;
 }
 </style>
