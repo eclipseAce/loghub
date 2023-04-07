@@ -155,7 +155,7 @@ export default {
         flex: 1 1;
     }
 
-    ::v-deep .el-table__row {
+    ::v-deep .el-table__row > .cell {
         font-family: monospace;
         font-size: 13px;
         font-weight: 500;
