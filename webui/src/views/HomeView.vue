@@ -64,7 +64,7 @@ export default {
     },
     methods: {
         simNoSearch(q, cb) {
-            cb(this.$store.state.simNoHistory.map((it) => ({ value: it })))
+            cb(this.$store.state.simNoHistory.map((it) => ({ value: it })).reverse())
         },
         onQuery() {
             this.$refs.form.validate(async (valid) => {
