@@ -18,8 +18,12 @@ const store = new Vuex.Store({
         },
         addSimNoHistory(state, simNo) {
             simNo = simNo.trim()
-            if (!simNo || state.simNoHistory.indexOf(simNo) > -1) {
+            if (!simNo) {
                 return
+            }
+            const index = state.simNoHistory.indexOf(simNo)
+            if (index > -1) {
+                state.simNoHistory.splice(index, 1)
             }
             state.simNoHistory.push(simNo)
         },

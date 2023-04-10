@@ -87,7 +87,7 @@ function formatBits(val) {
     const bits = []
     for (let i = 0; i < 32; i++) {
         if (val & (1 << i)) {
-            bits.push(i + 1)
+            bits.push(i)
         }
     }
     return bits.length === 0 ? '-' : bits.join(',')
