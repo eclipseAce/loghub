@@ -18,7 +18,7 @@
                 <el-button type="primary" @click="onQuery">查询</el-button>
             </el-form-item>
         </el-form>
-        <MsgView :data="data" v-loading="loading" style="margin-top: 4px;" />
+        <MsgView :data="data" :simNo="query.simNo" :until="query.until" :since="query.since" v-loading="loading" style="margin-top: 4px;" />
     </div>
 </template>
 
@@ -47,6 +47,11 @@ export default {
     data() {
         return {
             data: [],
+            query: {
+                simNo: '',
+                since: null,
+                until: null,
+            },
             loading: false,
             form: {
                 simNo: '',
@@ -74,11 +79,16 @@ export default {
                 this.$store.commit('addSimNoHistory', this.form.simNo)
                 this.loading = true
                 try {
+                    Object.assign(this.query, {
+                        simNo: this.form.simNo,
+                        since: this.form.since,
+                        until: this.form.until || new Date()
+                    })
                     const results = await this.$http.get('/query', {
                         params: {
-                            simNo: this.form.simNo,
-                            since: moment(this.form.since).format(dateFormat),
-                            until: moment(this.form.until || new Date()).format(dateFormat),
+                            simNo: this.query.simNo,
+                            since: moment(this.query.since).format(dateFormat),
+                            until: moment(this.query.until).format(dateFormat),
                         },
                     })
                     this.data = results

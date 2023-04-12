@@ -26,6 +26,9 @@
                 layout="prev, pager, next, jumper, sizes, total"
                 :total="filterItems.length"
             ></el-pagination>
+            <div class="view-options-item">
+                <el-button type="primary" size="mini" :disabled="data.length == 0" @click="onDownload">下载TXT</el-button>
+            </div>
         </div>
 
         <el-table :data="pageItems" height="100%" stripe size="mini" style="flex: 1 1">
@@ -93,10 +96,27 @@ function formatBits(val) {
     return bits.length === 0 ? '-' : bits.join(',')
 }
 
+const saveData = (function () {
+    var a = document.createElement('a')
+    document.body.appendChild(a)
+    a.style = 'display: none'
+    return function (content, fileName, type) {
+        var blob = new Blob([content], { type: type }),
+            url = window.URL.createObjectURL(blob)
+        a.href = url
+        a.download = fileName
+        a.click()
+        window.URL.revokeObjectURL(url)
+    }
+})()
+
 export default {
     name: 'MsgView',
     props: {
         data: Array,
+        simNo: String,
+        since: Date,
+        until: Date
     },
     data() {
         return {
@@ -200,6 +220,14 @@ export default {
         },
         getPageItemIndex(index) {
             return (this.page.current - 1) * this.page.size + index + 1
+        },
+        onDownload() {
+            const fileDateFormat = "YYYYMMDDHHmmss"
+            saveData(
+                this.filterItems.map(it => `${moment(it.Timestamp).format(dateFormat)}\t${base64ToHex(it.Raw)}`).join('\r\n'),
+                `${this.simNo}_${moment(this.since).format(fileDateFormat)}-${moment(this.until).format(fileDateFormat)}.txt`,
+                "text/plain"
+            )
         },
     },
 }
