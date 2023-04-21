@@ -121,21 +121,21 @@ func (mdb *MsgDB) handleEventMsg(eventMsg string) error {
 	if err != nil {
 		return err
 	}
-	m, err := DecodeLog(eventMsg, 0, uint32(sn))
+	m, mk, err := ParseLog(eventMsg, 0, uint32(sn))
 	if err != nil {
 		if err == ErrEmptyMsg {
 			return nil // for empty msg (just two 0x7E), ignore
 		}
 		return err
 	}
-	key, val, err := m.Encode()
+	key, err := mk.Encode()
 	if err != nil {
 		return err
 	}
 	if len(mdb.entryChan) == cap(mdb.entryChan) {
 		mdb.flush()
 	}
-	mdb.entryChan <- badger.NewEntry(key, val).WithTTL(48 * time.Hour)
+	mdb.entryChan <- badger.NewEntry(key, m.Raw).WithTTL(48 * time.Hour)
 	return nil
 }
 
@@ -174,12 +174,29 @@ func (mdb *MsgDB) Close() error {
 	return nil
 }
 
-func (mdb *MsgDB) Query(simNo string, since, until time.Time, filter func(*Msg) bool) ([]*Msg, error) {
+type MsgJSON struct {
+	Raw       []byte
+	TX        bool
+	DS        uint8
+	SN        uint32
+	Timestamp time.Time
+	MsgID     uint16
+	MsgSN     uint16
+	SimNo     string
+	Version   int16
+	Encrypted bool
+	PartTotal uint16
+	PartIndex uint16
+	Body      any
+	Warnings  []string
+}
+
+func (mdb *MsgDB) Query(simNo string, since, until time.Time) ([]*MsgJSON, error) {
 	sinceKey, untilKey, err := EncodeKeyRange(simNo, since, until)
 	if err != nil {
 		return nil, err
 	}
-	results := make([]*Msg, 0)
+	results := make([]*MsgJSON, 0)
 	if err := mdb.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -188,19 +205,46 @@ func (mdb *MsgDB) Query(simNo string, since, until time.Time, filter func(*Msg) 
 			if bytes.Compare(item.Key(), untilKey) > 0 {
 				break
 			}
+			mk, err := DecodeKey(item.Key())
+			if err != nil {
+				log.Println(fmt.Errorf("fail to decode key: %w", err))
+				continue
+			}
 			val, err := item.ValueCopy(make([]byte, 0, item.ValueSize()))
 			if err != nil {
 				log.Println(fmt.Errorf("query valueCopy: %w", err))
 				continue
 			}
-			m, err := DecodeEntry(item.Key(), val)
+			m, err := Decode(val)
 			if err != nil {
 				log.Println(fmt.Errorf("query decode msg: %w", err))
 				continue
 			}
-			if filter == nil || filter(m) {
-				results = append(results, m)
+			mj := &MsgJSON{
+				Raw:       m.Raw,
+				TX:        mk.TX,
+				DS:        mk.DS,
+				SN:        mk.SN,
+				Timestamp: mk.Timestamp,
+				MsgID:     m.MsgID,
+				MsgSN:     m.MsgSN,
+				SimNo:     m.SimNo,
+				Version:   m.Version,
+				Encrypted: m.Encrypted,
+				PartTotal: m.PartIndex,
+				PartIndex: m.PartTotal,
+				Warnings:  m.Warnings,
 			}
+			switch mj.MsgID {
+			case 0x0200:
+				mj.Body, err = DecodeBody_0200(m.Body)
+			default:
+				mj.Body = m.Body
+			}
+			if err != nil {
+				mj.Warnings = append(mj.Warnings, "fail decode msg body")
+			}
+			results = append(results, mj)
 		}
 		return nil
 	}); err != nil {

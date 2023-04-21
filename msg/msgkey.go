@@ -1,9 +1,9 @@
 package msg
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,41 +11,90 @@ import (
 
 type MsgKey struct {
 	SimNo     string
-	Flags     MsgFlags
 	Timestamp time.Time
+	DS        uint8
+	TX        bool
+	SN        uint32
+	MsgID     uint16
+	PartIndex uint16
+	PartTotal uint16
 }
 
+type MsgKeyLayout struct {
+	SimNo     [10]byte
+	Timestamp uint64
+	DS        uint8
+	Flags     uint8
+	Reserved  uint16
+	SN        uint32
+	MsgID     uint16
+	PartIndex uint16
+	PartTotal uint16
+}
+
+const (
+	MsgKeyFlag_Tx = (1 << iota)
+)
+
 func DecodeKey(b []byte) (*MsgKey, error) {
-	if len(b) != 10+8+8 {
-		return nil, errors.New("invalid key bytes")
+	var s MsgKeyLayout
+	if err := binary.Read(bytes.NewReader(b[10:]), binary.BigEndian, &s); err != nil {
+		return nil, err
 	}
-	return &MsgKey{
-		SimNo:     strings.TrimLeft(hex.EncodeToString(b[:10]), "0"),
-		Timestamp: time.Unix(int64(binary.BigEndian.Uint64(b[10:10+8])), 0),
-		Flags:     MsgFlags(binary.BigEndian.Uint64(b[10+8:])),
-	}, nil
+	mk := &MsgKey{
+		SimNo:     strings.TrimLeft(hex.EncodeToString(s.SimNo[:]), "0"),
+		Timestamp: time.Unix(int64(s.Timestamp), 0),
+		DS:        s.DS,
+		TX:        (s.Flags & MsgKeyFlag_Tx) != 0,
+		SN:        s.SN,
+		MsgID:     s.MsgID,
+		PartIndex: s.PartIndex,
+		PartTotal: s.PartTotal,
+	}
+	return mk, nil
 }
 
 func (mk *MsgKey) Encode() ([]byte, error) {
-	simNo, err := hex.DecodeString(strings.Repeat("0", 10*2-len(mk.SimNo)) + mk.SimNo)
-	if err != nil {
-		return nil, fmt.Errorf("invalid simNo: %w", err)
+	s := MsgKeyLayout{
+		Timestamp: uint64(mk.Timestamp.UTC().Unix()),
+		DS:        mk.DS,
+		SN:        mk.SN,
+		MsgID:     mk.MsgID,
+		PartIndex: mk.PartIndex,
+		PartTotal: mk.PartTotal,
 	}
-	b := make([]byte, 10+8+8)
-	copy(b, simNo)
-	binary.BigEndian.PutUint64(b[10:], uint64(mk.Timestamp.UTC().Unix()))
-	binary.BigEndian.PutUint64(b[10+8:], uint64(mk.Flags))
-	return b, nil
+	simNo, err := encodeSimNo(mk.SimNo)
+	if err != nil {
+		return nil, err
+	}
+	copy(s.SimNo[:], simNo)
+	if mk.TX {
+		s.Flags |= MsgKeyFlag_Tx
+	}
+	buf := &bytes.Buffer{}
+	_ = binary.Write(buf, binary.BigEndian, &s)
+	return buf.Bytes(), nil
 }
 
-func EncodeKeyRange(simNo string, since, until time.Time) (sinceKey, untilKey []byte, err error) {
-	sk := &MsgKey{SimNo: simNo, Timestamp: since, Flags: MsgFlags(0)}
-	uk := &MsgKey{SimNo: simNo, Timestamp: until, Flags: ^MsgFlags(0)}
-	if sinceKey, err = sk.Encode(); err != nil {
+func encodeSimNo(simNo string) ([]byte, error) {
+	p, err := hex.DecodeString(strings.Repeat("0", 10*2-len(simNo)) + simNo)
+	if err != nil {
+		return nil, fmt.Errorf("simNo contains non-hex chars: %w", err)
+	}
+	return p, nil
+}
+
+func EncodeKeyRange(simNo string, since, until time.Time) (sk, uk []byte, err error) {
+	s, err := encodeSimNo(simNo)
+	if err != nil {
 		return nil, nil, err
 	}
-	if untilKey, err = uk.Encode(); err != nil {
-		return nil, nil, err
+	writeKey := func(timestamp time.Time, pad byte) []byte {
+		buf := &bytes.Buffer{}
+		buf.Write(s)
+		binary.Write(buf, binary.BigEndian, uint64(timestamp.UTC().Unix()))
+		buf.Write(bytes.Repeat([]byte{pad}, 14))
+		return buf.Bytes()
 	}
-	return
+	return writeKey(since, 0x00), writeKey(until, 0xFF), nil
 }

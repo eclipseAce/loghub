@@ -13,8 +13,6 @@ import (
 
 type Msg struct {
 	Raw       []byte
-	Flags     MsgFlags
-	Timestamp time.Time
 	MsgID     uint16
 	MsgSN     uint16
 	SimNo     string
@@ -22,7 +20,7 @@ type Msg struct {
 	Encrypted bool
 	PartTotal uint16
 	PartIndex uint16
-	Body      any
+	Body      []byte
 	Warnings  []string
 }
 
@@ -31,8 +29,10 @@ var (
 	ErrBadMsg   = errors.New("bad msg")
 )
 
-func Decode(raw []byte, flags MsgFlags, timestamp time.Time) (*Msg, error) {
-	m := &Msg{Flags: flags, Timestamp: timestamp, Raw: raw, Warnings: make([]string, 0)}
+var logPattern = regexp.MustCompile(`^(?P<timestamp>\d{14}) (?P<xfer>Rx|Tx) (?P<payload>[a-f0-9]+)$`)
+
+func Decode(raw []byte) (*Msg, error) {
+	m := &Msg{Raw: raw, Warnings: make([]string, 0)}
 
 	if len(raw) < 2 || raw[0] != 0x7E || raw[len(raw)-1] != 0x7E {
 		return nil, ErrBadMsg
@@ -124,41 +124,26 @@ func Decode(raw []byte, flags MsgFlags, timestamp time.Time) (*Msg, error) {
 	if int(attribute&0x03FF) != remain-1 {
 		m.Warnings = append(m.Warnings, "bad body length")
 	}
-	var body []byte
 	if remain > 1 {
-		body = make([]byte, remain-1)
-		if err := binary.Read(buf, binary.BigEndian, body); err != nil {
+		m.Body = make([]byte, remain-1)
+		if err := binary.Read(buf, binary.BigEndian, m.Body); err != nil {
 			return nil, fmt.Errorf("invalid msgBody: %w", err)
 		}
 	} else {
-		body = []byte{}
+		m.Body = []byte{}
 		if remain == 0 {
 			m.Warnings = append(m.Warnings, "missing checksum")
 		}
-	}
-
-	var err error
-	switch m.MsgID {
-	case 0x0200:
-		m.Body, err = DecodeBody_0200(body)
-	default:
-		m.Body = body
-	}
-	if err != nil {
-		m.Warnings = append(m.Warnings, "bad msg body")
-		m.Body = body
 	}
 
 	// last byte is checksum, ignore
 	return m, nil
 }
 
-var logPattern = regexp.MustCompile(`^(?P<timestamp>\d{14}) (?P<xfer>Rx|Tx) (?P<payload>[a-f0-9]+)$`)
-
-func DecodeLog(log string, ds uint8, sn uint32) (*Msg, error) {
+func ParseLog(log string, ds uint8, sn uint32) (*Msg, *MsgKey, error) {
 	matches := logPattern.FindStringSubmatch(log)
 	if matches == nil {
-		return nil, errors.New("invalid log format")
+		return nil, nil, errors.New("invalid log format")
 	}
 	fields := make(map[string]string)
 	for i, name := range logPattern.SubexpNames() {
@@ -168,37 +153,22 @@ func DecodeLog(log string, ds uint8, sn uint32) (*Msg, error) {
 	}
 	timestamp, err := time.ParseInLocation("20060102150405", fields["timestamp"], time.Local)
 	if err != nil {
-		return nil, fmt.Errorf("invalid log timestamp: %w", err)
+		return nil, nil, fmt.Errorf("invalid log timestamp: %w", err)
 	}
 	payload, err := hex.DecodeString(fields["payload"])
 	if err != nil {
-		return nil, fmt.Errorf("invalid log payload: %w", err)
+		return nil, nil, fmt.Errorf("invalid log payload: %w", err)
 	}
-	var attr uint8
-	if fields["xfer"] == "Tx" {
-		attr |= MsgAttr_Tx
-	}
-	flags := NewMsgFlags(attr, ds, sn)
-	return Decode(payload, flags, timestamp)
-}
-
-func DecodeEntry(key, val []byte) (*Msg, error) {
-	mk, err := DecodeKey(key)
-	if err != nil {
-		return nil, err
-	}
-	return Decode(val, mk.Flags, mk.Timestamp)
-}
-
-func (m *Msg) Key() *MsgKey {
-	return &MsgKey{SimNo: m.SimNo, Timestamp: m.Timestamp, Flags: m.Flags}
-}
-
-func (m *Msg) Encode() (key, val []byte, err error) {
-	key, err = m.Key().Encode()
+	m, err := Decode(payload)
 	if err != nil {
 		return nil, nil, err
 	}
-	val = m.Raw
-	return
+	mk := &MsgKey{
+		SimNo:     m.SimNo,
+		Timestamp: timestamp,
+		TX:        fields["xfer"] == "Tx",
+		DS:        ds,
+		SN:        sn,
+	}
+	return m, mk, nil
 }

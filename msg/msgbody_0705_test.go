@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestDecode0705(t *testing.T) {
@@ -27,11 +26,11 @@ func TestDecode0705(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		msg, err := Decode(data, NewMsgFlags(0, 0, 0), time.Now())
+		m, err := Decode(data)
 		if err != nil {
 			t.Fatal(err)
 		}
-		body.Write(msg.Body.([]byte))
+		body.Write(m.Body)
 	}
 
 	b0705, err := DecodeBody_0705(body.Bytes())
