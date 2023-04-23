@@ -38,7 +38,7 @@ const (
 
 func DecodeKey(b []byte) (*MsgKey, error) {
 	var s MsgKeyLayout
-	if err := binary.Read(bytes.NewReader(b[10:]), binary.BigEndian, &s); err != nil {
+	if err := binary.Read(bytes.NewReader(b), binary.BigEndian, &s); err != nil {
 		return nil, err
 	}
 	mk := &MsgKey{

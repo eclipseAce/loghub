@@ -169,6 +169,9 @@ func ParseLog(log string, ds uint8, sn uint32) (*Msg, *MsgKey, error) {
 		TX:        fields["xfer"] == "Tx",
 		DS:        ds,
 		SN:        sn,
+		MsgID:     m.MsgID,
+		PartIndex: m.PartIndex,
+		PartTotal: m.PartTotal,
 	}
 	return m, mk, nil
 }

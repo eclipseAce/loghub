@@ -44,8 +44,8 @@
                 </template>
             </el-table-column>
             <el-table-column prop="Xfer" label="" width="32" align="center">
-                <template slot-scope="{ row: { Flags } }">
-                    <i v-if="!Flags.TX" class="el-icon-d-arrow-right table-row-icon" style="color: #67c23a"></i>
+                <template slot-scope="{ row: { TX } }">
+                    <i v-if="!TX" class="el-icon-d-arrow-right table-row-icon" style="color: #67c23a"></i>
                     <i v-else class="el-icon-d-arrow-left table-row-icon" style="color: #e6a23c"></i>
                 </template>
             </el-table-column>
@@ -143,7 +143,7 @@ export default {
         },
         filterItems() {
             return this.items.filter((it) => {
-                if ((it.Flags.TX && !this.msgXfer.tx) || (!it.Flags.TX && !this.msgXfer.rx)) {
+                if ((it.TX && !this.msgXfer.tx) || (!it.TX && !this.msgXfer.rx)) {
                     return false
                 }
                 return this.visibleMsgIds.indexOf(it.MsgID) != -1
