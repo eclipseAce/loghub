@@ -56,7 +56,7 @@ func DecodeBody_0705(raw []byte) (*MsgBody_0705, error) {
 	bcdTime += "." + hex.EncodeToString(common.Time[3:])[1:] // fix millis >= 1000
 	time, err := time.ParseInLocation("150405.000", bcdTime, time.Local)
 	if err != nil {
-		warnings = append(warnings, fmt.Sprintf("bad time in 0200 body '%s': %v", bcdTime, err))
+		warnings = append(warnings, fmt.Sprintf("bad time in 0705 body '%s': %v", bcdTime, err))
 	}
 	return &MsgBody_0705{
 		Count:    common.Count,

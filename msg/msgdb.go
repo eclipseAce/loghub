@@ -1,8 +1,8 @@
 package msg
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -174,6 +174,46 @@ func (mdb *MsgDB) Close() error {
 	return nil
 }
 
+type MsgItem struct {
+	item *badger.Item
+}
+
+func (mi *MsgItem) Key() (*MsgKey, error) {
+	return DecodeKey(mi.item.Key())
+}
+func (mi *MsgItem) Value() (*Msg, error) {
+	val, err := mi.item.ValueCopy(make([]byte, 0, mi.item.ValueSize()))
+	if err != nil {
+		return nil, err
+	}
+	return Decode(val)
+}
+
+var ErrStopIteration = errors.New("stop iteration")
+
+func (mdb *MsgDB) Iterate(simNo string, since time.Time, fn func(*MsgItem) error) error {
+	seek, err := (&MsgKey{SimNo: simNo, Timestamp: since}).Encode()
+	if err != nil {
+		return err
+	}
+	prefix := seek[:10]
+	return mdb.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		mi := &MsgItem{}
+		for it.Seek(seek); it.ValidForPrefix(prefix); it.Next() {
+			mi.item = it.Item()
+			if err := fn(mi); err != nil {
+				if err == ErrStopIteration {
+					break
+				}
+				log.Println(err)
+			}
+		}
+		return nil
+	})
+}
+
 type MsgJSON struct {
 	Raw       []byte
 	TX        bool
@@ -192,60 +232,44 @@ type MsgJSON struct {
 }
 
 func (mdb *MsgDB) Query(simNo string, since, until time.Time) ([]*MsgJSON, error) {
-	sinceKey, untilKey, err := EncodeKeyRange(simNo, since, until)
-	if err != nil {
-		return nil, err
-	}
 	results := make([]*MsgJSON, 0)
-	if err := mdb.db.View(func(txn *badger.Txn) error {
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
-		for it.Seek(sinceKey); ; it.Next() {
-			item := it.Item()
-			if bytes.Compare(item.Key(), untilKey) > 0 {
-				break
-			}
-			mk, err := DecodeKey(item.Key())
-			if err != nil {
-				log.Println(fmt.Errorf("fail to decode key: %w", err))
-				continue
-			}
-			val, err := item.ValueCopy(make([]byte, 0, item.ValueSize()))
-			if err != nil {
-				log.Println(fmt.Errorf("query valueCopy: %w", err))
-				continue
-			}
-			m, err := Decode(val)
-			if err != nil {
-				log.Println(fmt.Errorf("query decode msg: %w", err))
-				continue
-			}
-			mj := &MsgJSON{
-				Raw:       m.Raw,
-				TX:        mk.TX,
-				DS:        mk.DS,
-				SN:        mk.SN,
-				Timestamp: mk.Timestamp,
-				MsgID:     m.MsgID,
-				MsgSN:     m.MsgSN,
-				SimNo:     m.SimNo,
-				Version:   m.Version,
-				Encrypted: m.Encrypted,
-				PartTotal: m.PartIndex,
-				PartIndex: m.PartTotal,
-				Warnings:  m.Warnings,
-			}
-			switch mj.MsgID {
-			case 0x0200:
-				mj.Body, err = DecodeBody_0200(m.Body)
-			default:
-				mj.Body = m.Body
-			}
-			if err != nil {
-				mj.Warnings = append(mj.Warnings, "fail decode msg body")
-			}
-			results = append(results, mj)
+	if err := mdb.Iterate(simNo, since, func(mi *MsgItem) error {
+		mk, err := mi.Key()
+		if err != nil {
+			return fmt.Errorf("decode msgKey: %w", err)
 		}
+		if mk.Timestamp.After(until) {
+			return ErrStopIteration
+		}
+		m, err := mi.Value()
+		if err != nil {
+			return fmt.Errorf(" decode msg: %w", err)
+		}
+		mj := &MsgJSON{
+			Raw:       m.Raw,
+			TX:        mk.TX,
+			DS:        mk.DS,
+			SN:        mk.SN,
+			Timestamp: mk.Timestamp,
+			MsgID:     m.MsgID,
+			MsgSN:     m.MsgSN,
+			SimNo:     m.SimNo,
+			Version:   m.Version,
+			Encrypted: m.Encrypted,
+			PartTotal: m.PartIndex,
+			PartIndex: m.PartTotal,
+			Warnings:  m.Warnings,
+		}
+		switch mj.MsgID {
+		case 0x0200:
+			mj.Body, err = DecodeBody_0200(m.Body)
+		default:
+			mj.Body = m.Body
+		}
+		if err != nil {
+			mj.Warnings = append(mj.Warnings, "fail decode msg body")
+		}
+		results = append(results, mj)
 		return nil
 	}); err != nil {
 		return nil, err
