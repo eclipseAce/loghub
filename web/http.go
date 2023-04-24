@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"loghub/msg"
 	"loghub/webui"
 	"net/http"
@@ -35,7 +36,7 @@ func Serve(bind string, db *msg.MsgDB) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		results, err := db.Query(params.SimNo, params.Since, params.Until)
+		results, err := queryMsg(db, params.SimNo, params.Since, params.Until)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -44,4 +45,56 @@ func Serve(bind string, db *msg.MsgDB) {
 	})
 
 	go r.Run(bind)
+}
+
+type msgJSON struct {
+	Raw       []byte    `json:"raw"`
+	TX        bool      `json:"tx"`
+	DS        uint8     `json:"ds"`
+	SN        uint32    `json:"sn"`
+	Timestamp time.Time `json:"timestamp"`
+	MsgID     uint16    `json:"msgId"`
+	MsgSN     uint16    `json:"msgSn"`
+	SimNo     string    `json:"simNo"`
+	Version   int16     `json:"version"`
+	Encrypted bool      `json:"encrypted"`
+	PartTotal uint16    `json:"partTotal"`
+	PartIndex uint16    `json:"partIndex"`
+	Warnings  []string  `json:"warnings"`
+}
+
+func queryMsg(mdb *msg.MsgDB, simNo string, since, until time.Time) ([]*msgJSON, error) {
+	results := make([]*msgJSON, 0)
+	if err := mdb.Iterate(simNo, since, func(mi *msg.MsgItem) error {
+		mk, err := mi.Key()
+		if err != nil {
+			return fmt.Errorf("decode msgKey: %w", err)
+		}
+		if mk.Timestamp.After(until) {
+			return msg.ErrStopIteration
+		}
+		m, err := mi.Value()
+		if err != nil {
+			return fmt.Errorf(" decode msg: %w", err)
+		}
+		results = append(results, &msgJSON{
+			Raw:       m.Raw,
+			TX:        mk.TX,
+			DS:        mk.DS,
+			SN:        mk.SN,
+			Timestamp: mk.Timestamp,
+			MsgID:     m.MsgID,
+			MsgSN:     m.MsgSN,
+			SimNo:     m.SimNo,
+			Version:   m.Version,
+			Encrypted: m.Encrypted,
+			PartTotal: m.PartIndex,
+			PartIndex: m.PartTotal,
+			Warnings:  m.Warnings,
+		})
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return results, nil
 }

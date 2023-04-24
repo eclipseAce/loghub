@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const SimNoBytes = 10
+
 type MsgKey struct {
 	SimNo     string
 	Timestamp time.Time
@@ -21,7 +23,7 @@ type MsgKey struct {
 }
 
 type MsgKeyLayout struct {
-	SimNo     [10]byte
+	SimNo     [SimNoBytes]byte
 	Timestamp uint64
 	DS        uint8
 	Flags     uint8
@@ -63,7 +65,10 @@ func (mk *MsgKey) Encode() ([]byte, error) {
 		PartIndex: mk.PartIndex,
 		PartTotal: mk.PartTotal,
 	}
-	simNo, err := hex.DecodeString(strings.Repeat("0", 10*2-len(mk.SimNo)) + mk.SimNo)
+	if len(mk.SimNo) > SimNoBytes*2 {
+		return nil, fmt.Errorf("simNo too long (>%d chars)", SimNoBytes*2)
+	}
+	simNo, err := hex.DecodeString(strings.Repeat("0", SimNoBytes*2-len(mk.SimNo)) + mk.SimNo)
 	if err != nil {
 		return nil, fmt.Errorf("simNo contains non-hex chars: %w", err)
 	}

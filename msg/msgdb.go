@@ -23,7 +23,7 @@ type MsgDB struct {
 	closeWait sync.WaitGroup
 }
 
-func NewMsgDB(path string, bulkSize uint) (mdb *MsgDB, err error) {
+func OpenDB(path string, bulkSize uint) (mdb *MsgDB, err error) {
 	callOnError := func(fn func() error) {
 		if err != nil {
 			fn()
@@ -36,7 +36,7 @@ func NewMsgDB(path string, bulkSize uint) (mdb *MsgDB, err error) {
 	}
 	defer callOnError(db.Close)
 
-	seq, err := db.GetSequence([]byte("msgseq"), 10000)
+	seq, err := db.GetSequence([]byte("MSGSNSEQ"), 10000)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (mdb *MsgDB) handleEventMsg(eventMsg string) error {
 	if len(mdb.entryChan) == cap(mdb.entryChan) {
 		mdb.flush()
 	}
-	mdb.entryChan <- badger.NewEntry(key, m.Raw).WithTTL(48 * time.Hour)
+	mdb.entryChan <- badger.NewEntry(key, m.Raw).WithTTL(72 * time.Hour)
 	return nil
 }
 
@@ -196,7 +196,7 @@ func (mdb *MsgDB) Iterate(simNo string, since time.Time, fn func(*MsgItem) error
 	if err != nil {
 		return err
 	}
-	prefix := seek[:10]
+	prefix := seek[:SimNoBytes]
 	return mdb.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -212,67 +212,4 @@ func (mdb *MsgDB) Iterate(simNo string, since time.Time, fn func(*MsgItem) error
 		}
 		return nil
 	})
-}
-
-type MsgJSON struct {
-	Raw       []byte
-	TX        bool
-	DS        uint8
-	SN        uint32
-	Timestamp time.Time
-	MsgID     uint16
-	MsgSN     uint16
-	SimNo     string
-	Version   int16
-	Encrypted bool
-	PartTotal uint16
-	PartIndex uint16
-	Body      any
-	Warnings  []string
-}
-
-func (mdb *MsgDB) Query(simNo string, since, until time.Time) ([]*MsgJSON, error) {
-	results := make([]*MsgJSON, 0)
-	if err := mdb.Iterate(simNo, since, func(mi *MsgItem) error {
-		mk, err := mi.Key()
-		if err != nil {
-			return fmt.Errorf("decode msgKey: %w", err)
-		}
-		if mk.Timestamp.After(until) {
-			return ErrStopIteration
-		}
-		m, err := mi.Value()
-		if err != nil {
-			return fmt.Errorf(" decode msg: %w", err)
-		}
-		mj := &MsgJSON{
-			Raw:       m.Raw,
-			TX:        mk.TX,
-			DS:        mk.DS,
-			SN:        mk.SN,
-			Timestamp: mk.Timestamp,
-			MsgID:     m.MsgID,
-			MsgSN:     m.MsgSN,
-			SimNo:     m.SimNo,
-			Version:   m.Version,
-			Encrypted: m.Encrypted,
-			PartTotal: m.PartIndex,
-			PartIndex: m.PartTotal,
-			Warnings:  m.Warnings,
-		}
-		switch mj.MsgID {
-		case 0x0200:
-			mj.Body, err = DecodeBody_0200(m.Body)
-		default:
-			mj.Body = m.Body
-		}
-		if err != nil {
-			mj.Warnings = append(mj.Warnings, "fail decode msg body")
-		}
-		results = append(results, mj)
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	return results, nil
 }

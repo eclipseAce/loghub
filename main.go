@@ -26,7 +26,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	db, err := msg.NewMsgDB(opts.DataDir, opts.BulkSize)
+	db, err := msg.OpenDB(opts.DataDir, opts.BulkSize)
 	if err != nil {
 		log.Fatalln(err)
 	}
