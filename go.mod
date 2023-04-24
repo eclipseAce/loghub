@@ -3,6 +3,7 @@ module loghub
 go 1.19
 
 require (
+	github.com/deckarep/golang-set/v2 v2.3.0
 	github.com/dgraph-io/badger/v4 v4.0.1
 	github.com/elastic/go-lumber v0.1.1
 	github.com/gin-contrib/gzip v0.0.6
