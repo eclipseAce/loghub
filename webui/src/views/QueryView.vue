@@ -2,34 +2,27 @@
     <div class="query-view">
         <el-form class="query-form" ref="queryForm" :model="query" :rules="rules" size="mini" label-position="top">
             <el-form-item label="SimNo" prop="simNo">
-                <el-autocomplete style="width: 100%" v-model="query.simNo" :fetch-suggestions="simNoSearch" placeholder="请输入SIM卡号" />
+                <el-autocomplete v-model="query.simNo" :fetch-suggestions="simNoSearch" placeholder="请输入SIM卡号" />
             </el-form-item>
             <el-form-item label="开始时间戳" prop="since">
-                <el-date-picker
-                    style="width: 100%"
-                    v-model="query.since"
-                    type="datetime"
-                    placeholder="选择最早时间"
-                    align="right"
-                    :picker-options="pickerOptions"
-                />
+                <el-date-picker v-model="query.since" type="datetime" placeholder="选择最早时间" align="right" :picker-options="pickerOptions" />
             </el-form-item>
             <el-form-item label="结束时间戳" prop="until">
-                <el-date-picker style="width: 100%" v-model="query.until" type="datetime" placeholder="选择最晚时间" align="right" />
+                <el-date-picker v-model="query.until" type="datetime" placeholder="选择最晚时间" align="right" />
             </el-form-item>
             <el-form-item label="数据传输" prop="msgXfer">
-                <el-select style="width: 100%" v-model="query.msgXfer" multiple placeholder="全部">
+                <el-select v-model="query.msgXfer" multiple placeholder="全部">
                     <el-option value="tx" label="下行" />
                     <el-option value="rx" label="上行" />
                 </el-select>
             </el-form-item>
             <el-form-item label="报文类型" prop="msgIds">
-                <el-select style="width: 100%" v-model="query.msgIds" multiple placeholder="全部">
+                <el-select v-model="query.msgIds" multiple placeholder="全部">
                     <el-option v-for="item in msgIds" :key="item" :value="item" :label="item.toString(16).padStart(4, 0)" />
                 </el-select>
             </el-form-item>
             <el-form-item>
-                <el-button style="width: 100%" type="primary" :loading="loading" @click="onQuery">查询</el-button>
+                <el-button type="primary" :loading="loading" @click="onQuery">查询</el-button>
             </el-form-item>
         </el-form>
         <div class="view-wrapper" v-loading="loading">
@@ -216,7 +209,7 @@ export default {
 <style scoped lang="scss">
 .query-view {
     background-color: #f0f0f0;
-    padding: 20px;
+    padding: 16px;
     box-sizing: border-box;
     height: 100vh;
     display: flex;
@@ -228,6 +221,15 @@ export default {
     border: 1px solid #ddd;
     box-sizing: border-box;
     width: 240px;
+}
+.query-form .el-form-item__content {
+    & > .el-autocomplete,
+    & > .el-select,
+    & > .el-input,
+    & > .el-date-editor,
+    & > .el-button {
+        width: 100%;
+    }
 }
 
 .view-wrapper {
