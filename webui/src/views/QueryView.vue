@@ -240,7 +240,7 @@ export default {
     box-sizing: border-box;
     background-color: #fff;
     margin-left: 4px;
-    width: calc(100% - 240px);
+    width: calc(100% - 240px - 4px);
 }
 
 ::v-deep .el-table__cell {
