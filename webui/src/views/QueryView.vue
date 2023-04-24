@@ -28,6 +28,7 @@
         <div class="view-wrapper" v-loading="loading">
             <el-table :data="pageMsgs" stripe size="mini" height="100%">
                 <el-table-column type="index" width="60" :index="getPageItemIndex" align="right"></el-table-column>
+                <el-table-column prop="timestamp" label="时间戳" width="160" align="center"></el-table-column>
                 <el-table-column prop="warnings" label="" width="32" align="center">
                     <template slot-scope="{ row: { warnings } }">
                         <el-tooltip v-if="warnings.length !== 0" effect="dark" placement="right">
@@ -44,8 +45,6 @@
                         <i v-else class="el-icon-d-arrow-left table-row-icon" style="color: #e6a23c"></i>
                     </template>
                 </el-table-column>
-                <el-table-column prop="timestamp" label="时间戳" width="160" align="center"></el-table-column>
-                <el-table-column prop="simNo" label="SIM卡号" width="100" align="right"></el-table-column>
                 <el-table-column prop="msgId" label="ID" width="60" align="right">
                     <template slot-scope="{ row: { msgId } }">{{ msgId.toString(16).padStart(4, 0) }}</template>
                 </el-table-column>
