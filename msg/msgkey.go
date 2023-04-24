@@ -63,7 +63,10 @@ func (mk *MsgKey) Encode() ([]byte, error) {
 		PartIndex: mk.PartIndex,
 		PartTotal: mk.PartTotal,
 	}
-	simNo, err := encodeSimNo(mk.SimNo)
+	simNo, err := hex.DecodeString(strings.Repeat("0", 10*2-len(mk.SimNo)) + mk.SimNo)
+	if err != nil {
+		return nil, fmt.Errorf("simNo contains non-hex chars: %w", err)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -74,27 +77,4 @@ func (mk *MsgKey) Encode() ([]byte, error) {
 	buf := &bytes.Buffer{}
 	_ = binary.Write(buf, binary.BigEndian, &s)
 	return buf.Bytes(), nil
-}
-
-func encodeSimNo(simNo string) ([]byte, error) {
-	p, err := hex.DecodeString(strings.Repeat("0", 10*2-len(simNo)) + simNo)
-	if err != nil {
-		return nil, fmt.Errorf("simNo contains non-hex chars: %w", err)
-	}
-	return p, nil
-}
-
-func EncodeKeyRange(simNo string, since, until time.Time) (sk, uk []byte, err error) {
-	s, err := encodeSimNo(simNo)
-	if err != nil {
-		return nil, nil, err
-	}
-	writeKey := func(timestamp time.Time, pad byte) []byte {
-		buf := &bytes.Buffer{}
-		buf.Write(s)
-		binary.Write(buf, binary.BigEndian, uint64(timestamp.UTC().Unix()))
-		buf.Write(bytes.Repeat([]byte{pad}, 14))
-		return buf.Bytes()
-	}
-	return writeKey(since, 0x00), writeKey(until, 0xFF), nil
 }
