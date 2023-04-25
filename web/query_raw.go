@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type msgRawJSON struct {
+type msgRaw struct {
 	Timestamp time.Time `json:"timestamp"`
 	Raw       []byte    `json:"raw"`
 	TX        bool      `json:"tx"`
@@ -40,7 +40,7 @@ func queryRaw(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		newMsgIdsFilter(params.MsgIDs),
 		newMsgXferFilter(params.MsgXfer),
 	}
-	msgs := make([]*msgRawJSON, 0)
+	msgs := make([]*msgRaw, 0)
 	msgIds := mapset.NewThreadUnsafeSet[uint16]()
 	if err := mdb.Iterate(params.SimNo, params.Since, func(mi *msg.MsgItem) error {
 		mk, err := mi.Key()
@@ -60,7 +60,7 @@ func queryRaw(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		if err != nil {
 			return fmt.Errorf(" decode msg: %w", err)
 		}
-		msgs = append(msgs, &msgRawJSON{
+		msgs = append(msgs, &msgRaw{
 			Timestamp: mk.Timestamp,
 			Raw:       m.Raw,
 			TX:        mk.TX,

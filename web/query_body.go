@@ -10,31 +10,42 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type msgBodyJSON_Base struct {
+type msgBody_Base struct {
 	Timestamp time.Time `json:"timestamp"`
 	Warnings  []string  `json:"warnings"`
-}
-
-type msgBodyJSON_Unknown struct {
-	*msgBodyJSON_Base
-	Data []byte `json:"data"`
-}
-
-type msgBodyJSON_0200 struct {
-	*msgBodyJSON_Base
-	Alarm     uint32    `json:"alarm"`
-	Status    uint32    `json:"status"`
-	Latitude  float64   `json:"latitude"`
-	Longitude float64   `json:"longitude"`
-	Altitude  uint16    `json:"altitude"`
-	Speed     float64   `json:"speed"`
-	Direction uint16    `json:"direction"`
-	Time      time.Time `json:"time"`
 }
 
 type msgEntry struct {
 	Key   *msg.MsgKey
 	Value *msg.Msg
+}
+
+type decodeBodyFunc func(base *msgBody_Base, raw []byte) (any, error)
+
+func decodeEntries(ents []*msgEntry) any {
+	base := &msgBody_Base{
+		Timestamp: ents[0].Key.Timestamp,
+		Warnings:  make([]string, 0),
+	}
+	buf := &bytes.Buffer{}
+	for _, me := range ents {
+		buf.Write(me.Value.Body)
+	}
+	var decode decodeBodyFunc
+	switch ents[0].Key.MsgID {
+	case 0x0200:
+		decode = decodeBody_0200
+	case 0x0705:
+		decode = decodeBody_0705
+	default:
+		decode = decodeBody_unknown
+	}
+	body, err := decode(base, buf.Bytes())
+	if err != nil {
+		base.Warnings = append(base.Warnings, err.Error())
+		body, _ = decodeBody_unknown(base, buf.Bytes())
+	}
+	return body
 }
 
 func queryBody(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
@@ -73,38 +84,7 @@ func queryBody(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		}
 		ents = append(ents, &msgEntry{Key: mk, Value: m})
 		if len(ents) == int(ents[0].Key.PartTotal) {
-			base := &msgBodyJSON_Base{
-				Timestamp: ents[0].Key.Timestamp,
-				Warnings:  make([]string, 0),
-			}
-			buf := &bytes.Buffer{}
-			for _, me := range ents {
-				buf.Write(me.Value.Body)
-			}
-			switch ents[0].Key.MsgID {
-			case 0x0200:
-				body, err := msg.DecodeBody_0200(buf.Bytes())
-				if err != nil {
-					base.Warnings = append(base.Warnings, err.Error())
-				}
-				list = append(list, &msgBodyJSON_0200{
-					msgBodyJSON_Base: base,
-					Alarm:            body.Alarm,
-					Status:           body.Status,
-					Latitude:         body.Latitude,
-					Longitude:        body.Longitude,
-					Altitude:         body.Altitude,
-					Speed:            body.Speed,
-					Direction:        body.Direction,
-					Time:             body.Time,
-				})
-
-			default:
-				list = append(list, &msgBodyJSON_Unknown{
-					msgBodyJSON_Base: base,
-					Data:             buf.Bytes(),
-				})
-			}
+			list = append(list, decodeEntries(ents))
 			ents = make([]*msgEntry, 0)
 		}
 		return nil

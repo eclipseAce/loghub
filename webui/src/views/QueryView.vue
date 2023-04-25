@@ -173,7 +173,7 @@ export default {
                     }
                     const result = await this.$http.get('/query', { params })
                     this.msgs = result.msgs
-                    this.msgIds = result.msgIds
+                    this.msgIds = result.msgIds.sort((a, b) => a - b)
                     this.page.current = 1
                 } finally {
                     this.loading = false
