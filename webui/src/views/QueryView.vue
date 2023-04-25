@@ -172,7 +172,7 @@ export default {
                         msgXfer: this.query.msgXfer.join(','),
                     }
                     const result = await this.$http.get('/query', { params })
-                    this.msgs = result.msgs.reverse()
+                    this.msgs = result.msgs
                     this.msgIds = result.msgIds
                     this.page.current = 1
                 } finally {
@@ -210,7 +210,7 @@ export default {
     background-color: #f0f0f0;
     padding: 16px;
     box-sizing: border-box;
-    height: 100vh;
+    height: 100%;
     display: flex;
 }
 

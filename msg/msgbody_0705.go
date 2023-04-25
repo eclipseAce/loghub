@@ -18,7 +18,7 @@ type MsgBody_0705 struct {
 type MsgBody_0705Item struct {
 	ID    uint32
 	Flags uint8
-	Data  [8]byte
+	Data  []byte
 }
 
 func DecodeBody_0705(raw []byte) (*MsgBody_0705, error) {
@@ -43,7 +43,7 @@ func DecodeBody_0705(raw []byte) (*MsgBody_0705, error) {
 		items = append(items, &MsgBody_0705Item{
 			ID:    item.ID & 0x1FFFFFFF,
 			Flags: uint8((item.ID & 0xE0000000) >> 29),
-			Data:  item.Data,
+			Data:  item.Data[:],
 		})
 	}
 	if buf.Len() != 0 {

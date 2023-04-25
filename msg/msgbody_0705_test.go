@@ -23,16 +23,16 @@ func TestDecodeBody_0705(t *testing.T) {
 			{
 				ID:    0x12345678 & 0x1FFFFFFF,
 				Flags: (0x12345678 & 0xE0000000) >> 29,
+				Data:  mustDecodeHexString("23 45 67 89 0A BC DE F1"),
 			},
 			{
 				ID:    0x23456789 & 0x1FFFFFFF,
 				Flags: (0x23456789 & 0xE0000000) >> 29,
+				Data:  mustDecodeHexString("12 34 56 78 90 AB CD EF"),
 			},
 		},
 		Warnings: []string{},
 	}
-	copy(expected.Items[0].Data[:], mustDecodeHexString("23 45 67 89 0A BC DE F1"))
-	copy(expected.Items[1].Data[:], mustDecodeHexString("12 34 56 78 90 AB CD EF"))
 	if b1, b2, eq := mustMarshalEqual(body, expected); !eq {
 		t.Errorf("mismatch:\n\t%s\n\t%s\n", string(b1), string(b2))
 	}

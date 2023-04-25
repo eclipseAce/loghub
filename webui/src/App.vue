@@ -1,6 +1,12 @@
 <template>
     <div id="app">
-        <router-view />
+        <el-menu :default-active="$route.path" mode="horizontal" router active-text-color="#409EFF">
+            <el-menu-item index="/query">基本查询</el-menu-item>
+            <el-menu-item index="/queryBody">消息体查询</el-menu-item>
+        </el-menu>
+        <div style="width: 100%; height: calc(100vh - 61px)">
+            <router-view />
+        </div>
     </div>
 </template>
 
