@@ -70,8 +70,8 @@ func queryRaw(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 			MsgSN:     m.MsgSN,
 			Version:   m.Version,
 			Encrypted: m.Encrypted,
-			PartTotal: m.PartIndex,
-			PartIndex: m.PartTotal,
+			PartTotal: m.PartTotal,
+			PartIndex: m.PartIndex,
 			Warnings:  m.Warnings,
 		})
 		return nil

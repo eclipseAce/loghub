@@ -172,7 +172,7 @@ export default {
                         msgXfer: this.query.msgXfer.join(','),
                     }
                     const result = await this.$http.get('/query', { params })
-                    this.msgs = result.msgs
+                    this.msgs = result.msgs.reverse()
                     this.msgIds = result.msgIds.sort((a, b) => a - b)
                     this.page.current = 1
                 } finally {
