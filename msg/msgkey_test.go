@@ -26,8 +26,7 @@ func TestDecodeAndDecodeKey(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if *decoded != *mk {
-		t.Error("mismatch")
-		return
+	if b1, b2, eq := mustMarshalEqual(mk, decoded); !eq {
+		t.Errorf("mismatch:\n\t%s\n\t%s\n", string(b1), string(b2))
 	}
 }

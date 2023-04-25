@@ -9,16 +9,21 @@ import (
 )
 
 type MsgBody_0200 struct {
-	Alarm      uint32
-	Status     uint32
-	Latitude   float64
-	Longitude  float64
-	Altitude   uint16
-	Speed      float64
-	Direction  uint16
-	Time       time.Time
-	AttachInfo map[uint8][]byte
-	Warnings   []string
+	Alarm     uint32
+	Status    uint32
+	Latitude  float64
+	Longitude float64
+	Altitude  uint16
+	Speed     float64
+	Direction uint16
+	Time      time.Time
+	ExtInfo   []*MsgBody_0200_ExtInfo
+	Warnings  []string
+}
+
+type MsgBody_0200_ExtInfo struct {
+	ID   uint8
+	Data []byte
 }
 
 func DecodeBody_0200(raw []byte) (*MsgBody_0200, error) {
@@ -37,7 +42,7 @@ func DecodeBody_0200(raw []byte) (*MsgBody_0200, error) {
 	if err := binary.Read(buf, binary.BigEndian, &common); err != nil {
 		return nil, err
 	}
-	attachInfo := make(map[uint8][]byte)
+	extInfo := make([]*MsgBody_0200_ExtInfo, 0)
 	for buf.Len() > 0 {
 		var id uint8
 		if err := binary.Read(buf, binary.BigEndian, &id); err != nil {
@@ -54,11 +59,10 @@ func DecodeBody_0200(raw []byte) (*MsgBody_0200, error) {
 		if err := binary.Read(buf, binary.BigEndian, data); err != nil {
 			return nil, err
 		}
-		if attachInfo[id] != nil {
-			warnings = append(warnings, fmt.Sprintf("duplicated attach id '%02X'", id))
-			continue
-		}
-		attachInfo[id] = data
+		extInfo = append(extInfo, &MsgBody_0200_ExtInfo{
+			ID:   id,
+			Data: data,
+		})
 	}
 	bcdTime := hex.EncodeToString(common.Time[:])
 	time, err := time.ParseInLocation("20060102150405", "20"+bcdTime, time.Local)
@@ -66,15 +70,15 @@ func DecodeBody_0200(raw []byte) (*MsgBody_0200, error) {
 		warnings = append(warnings, fmt.Sprintf("bad time in 0200 body '%s': %v", bcdTime, err))
 	}
 	return &MsgBody_0200{
-		Alarm:      common.Alarm,
-		Status:     common.Status,
-		Latitude:   float64(common.Latitude) / 1000000,
-		Longitude:  float64(common.Longitude) / 1000000,
-		Altitude:   common.Altitude,
-		Speed:      float64(common.Speed) / 10,
-		Direction:  common.Direction,
-		Time:       time,
-		AttachInfo: attachInfo,
-		Warnings:   warnings,
+		Alarm:     common.Alarm,
+		Status:    common.Status,
+		Latitude:  float64(common.Latitude) / 1000000,
+		Longitude: float64(common.Longitude) / 1000000,
+		Altitude:  common.Altitude,
+		Speed:     float64(common.Speed) / 10,
+		Direction: common.Direction,
+		Time:      time,
+		ExtInfo:   extInfo,
+		Warnings:  warnings,
 	}, nil
 }
