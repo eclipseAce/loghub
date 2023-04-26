@@ -2,10 +2,13 @@
     <div id="app">
         <el-menu :default-active="$route.path" mode="horizontal" router active-text-color="#409EFF">
             <el-menu-item index="/query">基本查询</el-menu-item>
-            <el-menu-item index="/queryBody">消息体查询</el-menu-item>
+            <el-menu-item index="/query0200">定位查询</el-menu-item>
+            <el-menu-item index="/query0705">CAN查询</el-menu-item>
         </el-menu>
         <div style="width: 100%; height: calc(100vh - 61px)">
-            <router-view />
+            <keep-alive>
+                <router-view />
+            </keep-alive>
         </div>
     </div>
 </template>
