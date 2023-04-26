@@ -12,6 +12,7 @@ import (
 
 type msgRaw struct {
 	Timestamp time.Time `json:"timestamp"`
+	Warnings  []string  `json:"warnings"`
 	Raw       []byte    `json:"raw"`
 	TX        bool      `json:"tx"`
 	DS        uint8     `json:"ds"`
@@ -22,7 +23,6 @@ type msgRaw struct {
 	Encrypted bool      `json:"encrypted"`
 	PartTotal uint16    `json:"partTotal"`
 	PartIndex uint16    `json:"partIndex"`
-	Warnings  []string  `json:"warnings"`
 }
 
 func queryRaw(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {

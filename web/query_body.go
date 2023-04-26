@@ -22,17 +22,17 @@ type msgEntry struct {
 
 type decodeBodyFunc func(base *msgBody_Base, raw []byte) (any, error)
 
-func decodeEntries(ents []*msgEntry) any {
+func decodeEntries(entries []*msgEntry) any {
 	base := &msgBody_Base{
-		Timestamp: ents[0].Key.Timestamp,
+		Timestamp: entries[0].Key.Timestamp,
 		Warnings:  make([]string, 0),
 	}
 	buf := &bytes.Buffer{}
-	for _, me := range ents {
+	for _, me := range entries {
 		buf.Write(me.Value.Body)
 	}
 	var decode decodeBodyFunc
-	switch ents[0].Key.MsgID {
+	switch entries[0].Key.MsgID {
 	case 0x0200:
 		decode = decodeBody_0200
 	case 0x0705:
@@ -59,7 +59,7 @@ func queryBody(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		return nil, http.StatusBadRequest, err
 	}
 	list := make([]any, 0)
-	ents := make([]*msgEntry, 0)
+	entries := make([]*msgEntry, 0)
 	if err := mdb.Iterate(params.SimNo, params.Since, func(mi *msg.MsgItem) error {
 		mk, err := mi.Key()
 		if err != nil {
@@ -68,24 +68,23 @@ func queryBody(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		if mk.MsgID != params.MsgID {
 			return nil
 		}
-		if len(ents) == 0 && mk.Timestamp.After(params.Until) {
+		if len(entries) == 0 && mk.Timestamp.After(params.Until) {
 			return msg.ErrStopIteration
 		}
-		if n := len(ents); n > 0 {
-			if ents[0].Key.MsgID != mk.MsgID ||
-				ents[0].Key.PartTotal != mk.PartTotal ||
-				ents[n-1].Key.PartIndex+1 != mk.PartIndex {
-				ents = make([]*msgEntry, 0)
+		if n := len(entries); n > 0 {
+			mkFirst, mkLast := entries[0].Key, entries[n-1].Key
+			if mkFirst.MsgID != mk.MsgID || mkFirst.PartTotal != mk.PartTotal || mkLast.PartIndex+1 != mk.PartIndex {
+				entries = make([]*msgEntry, 0)
 			}
 		}
 		m, err := mi.Value()
 		if err != nil {
 			return fmt.Errorf(" decode msg: %w", err)
 		}
-		ents = append(ents, &msgEntry{Key: mk, Value: m})
-		if len(ents) == int(ents[0].Key.PartTotal) {
-			list = append(list, decodeEntries(ents))
-			ents = make([]*msgEntry, 0)
+		entries = append(entries, &msgEntry{Key: mk, Value: m})
+		if len(entries) == int(entries[0].Key.PartTotal) {
+			list = append(list, decodeEntries(entries))
+			entries = make([]*msgEntry, 0)
 		}
 		return nil
 	}); err != nil {
