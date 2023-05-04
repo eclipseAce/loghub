@@ -2,6 +2,7 @@ const { defineConfig } = require('@vue/cli-service')
 module.exports = defineConfig({
   publicPath: '/ui/',
   transpileDependencies: true,
+  productionSourceMap: false,
   devServer: {
     proxy: {
       "/api": {
