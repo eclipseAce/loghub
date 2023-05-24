@@ -46,7 +46,7 @@
                 </el-table-column>
                 <el-table-column prop="msgIdHex" label="ID" width="60" align="right"></el-table-column>
                 <el-table-column prop="msgSn" label="SN" width="60" align="right"></el-table-column>
-                <el-table-column prop="version" label="版本" width="60" align="right"></el-table-column>
+                <el-table-column prop="version" label="版本" width="100" align="right"></el-table-column>
                 <el-table-column prop="part" label="分包" width="60" align="right"></el-table-column>
                 <el-table-column prop="raw" label="数据"></el-table-column>
             </DataTable>
