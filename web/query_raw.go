@@ -30,6 +30,7 @@ func queryRaw(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		SimNo   string    `form:"simNo" binding:"required"`
 		Since   time.Time `form:"since" time_format:"2006-01-02 15:04:05" binding:"required"`
 		Until   time.Time `form:"until" time_format:"2006-01-02 15:04:05" binding:"required"`
+		DS      uint8     `form:"ds"`
 		MsgIDs  string    `form:"msgIds"`
 		MsgXfer string    `form:"msgXfer"`
 	}
@@ -37,6 +38,7 @@ func queryRaw(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		return nil, http.StatusBadRequest, err
 	}
 	filters := []msgKeyFilterFunc{
+		func(mk *msg.MsgKey) bool { return mk.DS == params.DS },
 		newMsgIdsFilter(params.MsgIDs),
 		newMsgXferFilter(params.MsgXfer),
 	}

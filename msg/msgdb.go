@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +15,8 @@ import (
 	"github.com/elastic/go-lumber/server"
 )
 
+var MaxMsgTTL = 72 * time.Hour
+
 type MsgDB struct {
 	db        *badger.DB
 	seq       *badger.Sequence
@@ -21,6 +24,32 @@ type MsgDB struct {
 	entryChan chan *badger.Entry
 	closeChan chan struct{}
 	closeWait sync.WaitGroup
+}
+
+type msgTags struct {
+	DS  uint8
+	TTL time.Duration
+}
+
+func parseMsgTags(tags []string) *msgTags {
+	mt := &msgTags{DS: 0, TTL: MaxMsgTTL}
+	for _, tag := range tags {
+		kv := strings.SplitN(tag, "=", 2)
+		k, v := strings.ToLower(strings.Trim(kv[0], " \t")), strings.Trim(kv[1], " \t")
+		switch k {
+		case "ds":
+			v, err := strconv.ParseUint(v, 10, 0)
+			if err == nil && v < 256 {
+				mt.DS = uint8(v)
+			}
+		case "ttl":
+			v, err := time.ParseDuration(v)
+			if err == nil && v <= MaxMsgTTL {
+				mt.TTL = v
+			}
+		}
+	}
+	return mt
 }
 
 func OpenDB(path string, bulkSize uint) (mdb *MsgDB, err error) {
@@ -85,10 +114,25 @@ func (mdb *MsgDB) receiveTask(s server.Server) {
 		select {
 		case batch := <-recvChan:
 			for _, event := range batch.Events {
-				data := event.(map[string]any)
-				eventMsg := strings.Trim(data["message"].(string), "\x00\r\n\t ")
-				if err := mdb.handleEventMsg(eventMsg); err != nil {
-					b, _ := json.Marshal(eventMsg)
+				data, ok := event.(map[string]any)
+				if !ok {
+					continue
+				}
+
+				msgField, ok := data["message"].(string)
+				if !ok {
+					continue
+				}
+				msg := strings.Trim(msgField, "\x00\r\n\t ")
+
+				tags := &msgTags{}
+				tagsField, ok := data["tags"].([]string)
+				if ok {
+					tags = parseMsgTags(tagsField)
+				}
+
+				if err := mdb.handleEventMsg(msg, tags); err != nil {
+					b, _ := json.Marshal(msg)
 					log.Println(fmt.Errorf("handleLogEvent: %w: %s", err, string(b)))
 				}
 				atomic.AddUint64(&mdb.counter, 1)
@@ -116,12 +160,12 @@ func (mdb *MsgDB) statTask() {
 	}
 }
 
-func (mdb *MsgDB) handleEventMsg(eventMsg string) error {
+func (mdb *MsgDB) handleEventMsg(msg string, tags *msgTags) error {
 	sn, err := mdb.seq.Next()
 	if err != nil {
 		return err
 	}
-	m, mk, err := ParseLog(eventMsg, 0, uint32(sn))
+	m, mk, err := ParseLog(msg, tags.DS, uint32(sn))
 	if err != nil {
 		if err == ErrEmptyMsg {
 			return nil // for empty msg (just two 0x7E), ignore
@@ -135,7 +179,7 @@ func (mdb *MsgDB) handleEventMsg(eventMsg string) error {
 	if len(mdb.entryChan) == cap(mdb.entryChan) {
 		mdb.flush()
 	}
-	mdb.entryChan <- badger.NewEntry(key, m.Raw).WithTTL(72 * time.Hour)
+	mdb.entryChan <- badger.NewEntry(key, m.Raw).WithTTL(tags.TTL)
 	return nil
 }
 

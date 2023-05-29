@@ -53,6 +53,7 @@ func queryBody(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		SimNo string    `form:"simNo" binding:"required"`
 		Since time.Time `form:"since" time_format:"2006-01-02 15:04:05" binding:"required"`
 		Until time.Time `form:"until" time_format:"2006-01-02 15:04:05" binding:"required"`
+		DS    uint8     `form:"ds"`
 		MsgID uint16    `form:"msgId"`
 	}
 	if err := c.BindQuery(&params); err != nil {
@@ -65,7 +66,7 @@ func queryBody(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		if err != nil {
 			return fmt.Errorf("decode msgKey: %w", err)
 		}
-		if mk.MsgID != params.MsgID {
+		if mk.MsgID != params.MsgID || mk.DS != params.DS {
 			return nil
 		}
 		if len(entries) == 0 && mk.Timestamp.After(params.Until) {
