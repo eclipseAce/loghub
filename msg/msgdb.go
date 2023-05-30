@@ -31,8 +31,11 @@ type msgTags struct {
 	TTL time.Duration
 }
 
-func parseMsgTags(tags []string) *msgTags {
-	mt := &msgTags{DS: 0, TTL: MaxMsgTTL}
+func newMsgTags() *msgTags {
+	return &msgTags{DS: 0, TTL: MaxMsgTTL}
+}
+
+func parseMsgTags(tags []string, mt *msgTags) {
 	for _, tag := range tags {
 		kv := strings.SplitN(tag, "=", 2)
 		k, v := strings.ToLower(strings.Trim(kv[0], " \t")), strings.Trim(kv[1], " \t")
@@ -49,7 +52,6 @@ func parseMsgTags(tags []string) *msgTags {
 			}
 		}
 	}
-	return mt
 }
 
 func OpenDB(path string, bulkSize uint) (mdb *MsgDB, err error) {
@@ -125,10 +127,10 @@ func (mdb *MsgDB) receiveTask(s server.Server) {
 				}
 				msg := strings.Trim(msgField, "\x00\r\n\t ")
 
-				tags := &msgTags{}
+				tags := newMsgTags()
 				tagsField, ok := data["tags"].([]string)
 				if ok {
-					tags = parseMsgTags(tagsField)
+					parseMsgTags(tagsField, tags)
 				}
 
 				if err := mdb.handleEventMsg(msg, tags); err != nil {
