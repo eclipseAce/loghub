@@ -1,0 +1,7 @@
+filebeat.inputs:
+- type: log
+  paths:
+    - path/to/gw_codec.log
+  tags: ["ds=0", "ttl=72h"]
+output.logstash:
+  hosts: ["loghub-service:5044"]
