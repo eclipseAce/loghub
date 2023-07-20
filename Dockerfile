@@ -21,8 +21,8 @@ RUN env GOOS=linux GOARCH=amd64 go build
 
 FROM debian:stable-slim
 
-ENV LANG en_US.utf8
-ENV TZ Asia/Shanghai
+ENV LANG=en_US.utf8
+ENV TZ=Asia/Shanghai
 
 WORKDIR /app
 
