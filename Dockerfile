@@ -1,5 +1,9 @@
 FROM node:lts as webui
 
+ENV LANG en_US.utf8
+
+RUN export TZ=Asia/Shanghai
+
 WORKDIR /app
 
 COPY webui/ webui
