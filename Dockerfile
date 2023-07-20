@@ -1,8 +1,5 @@
 FROM node:lts as webui
 
-ENV LANG en_US.utf8
-ENV TZ Asia/Shanghai
-
 WORKDIR /app
 
 COPY webui/ webui
@@ -23,6 +20,9 @@ COPY --from=webui /app/webui/ webui
 RUN env GOOS=linux GOARCH=amd64 go build
 
 FROM debian:stable-slim
+
+ENV LANG en_US.utf8
+ENV TZ Asia/Shanghai
 
 WORKDIR /app
 
