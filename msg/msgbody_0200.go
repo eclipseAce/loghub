@@ -48,9 +48,9 @@ func DecodeBody_0200(raw []byte) (*MsgBody_0200, error) {
 		if err := binary.Read(buf, binary.BigEndian, &id); err != nil {
 			return nil, err
 		}
-		if id == 0xE0 {
-			continue // vendor custom, skip
-		}
+		// if id == 0xE0 {
+		// 	continue // vendor custom, skip
+		// }
 		var length uint8
 		if err := binary.Read(buf, binary.BigEndian, &length); err != nil {
 			return nil, err

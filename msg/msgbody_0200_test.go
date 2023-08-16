@@ -42,3 +42,19 @@ func TestDecodeBody_0200(t *testing.T) {
 		t.Errorf("mismatch:\n\t%s\n\t%s\n", string(b1), string(b2))
 	}
 }
+
+func TestError(t *testing.T) {
+	msg, err := Decode(mustDecodeHexString(
+		"7E 02 00 00 45 06 46 18 21 63 87 0A 3C 00 00 80 26 02 0C 00 01 02 5E 3E 99 07 16 78 66 00 00 00 00 00 00 23 08 16 14 04 11 01 04 00 BB F9 27 02 02 00 00 03 02 00 D7 11 01 00 25 04 00 00 00 00 2B 04 00 06 00 05 30 01 0E 31 01 00 E0 04 E4 02 04 1A 35 7E",
+	))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	body, err := DecodeBody_0200(msg.Body)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	t.Log(body)
+}
