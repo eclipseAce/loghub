@@ -16,6 +16,7 @@ type msgBody_0200 struct {
 	Direction uint16                  `json:"direction"`
 	Time      time.Time               `json:"time"`
 	ExtInfo   []*msgBody_0200_ExtInfo `json:"extInfo"`
+	Mileage   float64                 `json:"mileage"`
 }
 
 type msgBody_0200_ExtInfo struct {
@@ -39,6 +40,7 @@ func decodeBody_0200(base *msgBody_Base, raw []byte) (any, error) {
 		Direction:    b.Direction,
 		Time:         b.Time,
 		ExtInfo:      make([]*msgBody_0200_ExtInfo, len(b.ExtInfo)),
+		Mileage:      b.ParsedExtInfo.Mileage,
 	}
 	for i, mb := range b.ExtInfo {
 		body.ExtInfo[i] = &msgBody_0200_ExtInfo{

@@ -9,21 +9,26 @@ import (
 )
 
 type MsgBody_0200 struct {
-	Alarm     uint32
-	Status    uint32
-	Latitude  float64
-	Longitude float64
-	Altitude  uint16
-	Speed     float64
-	Direction uint16
-	Time      time.Time
-	ExtInfo   []*MsgBody_0200_ExtInfo
-	Warnings  []string
+	Alarm         uint32
+	Status        uint32
+	Latitude      float64
+	Longitude     float64
+	Altitude      uint16
+	Speed         float64
+	Direction     uint16
+	Time          time.Time
+	ExtInfo       []*MsgBody_0200_ExtInfo
+	ParsedExtInfo MsgBody_0200_ParsedExtInfo
+	Warnings      []string
 }
 
 type MsgBody_0200_ExtInfo struct {
 	ID   uint8
 	Data []byte
+}
+
+type MsgBody_0200_ParsedExtInfo struct {
+	Mileage float64
 }
 
 func DecodeBody_0200(raw []byte) (*MsgBody_0200, error) {
@@ -43,6 +48,7 @@ func DecodeBody_0200(raw []byte) (*MsgBody_0200, error) {
 		return nil, err
 	}
 	extInfo := make([]*MsgBody_0200_ExtInfo, 0)
+	parsedExtInfo := MsgBody_0200_ParsedExtInfo{}
 	for buf.Len() > 0 {
 		var id uint8
 		if err := binary.Read(buf, binary.BigEndian, &id); err != nil {
@@ -63,6 +69,10 @@ func DecodeBody_0200(raw []byte) (*MsgBody_0200, error) {
 			ID:   id,
 			Data: data,
 		})
+		switch id {
+		case 0x01:
+			parsedExtInfo.Mileage = float64(binary.BigEndian.Uint32(data)) / 10
+		}
 	}
 	bcdTime := hex.EncodeToString(common.Time[:])
 	time, err := time.ParseInLocation("20060102150405", "20"+bcdTime, time.Local)
@@ -70,15 +80,16 @@ func DecodeBody_0200(raw []byte) (*MsgBody_0200, error) {
 		warnings = append(warnings, fmt.Sprintf("bad time in 0200 body '%s': %v", bcdTime, err))
 	}
 	return &MsgBody_0200{
-		Alarm:     common.Alarm,
-		Status:    common.Status,
-		Latitude:  float64(common.Latitude) / 1000000,
-		Longitude: float64(common.Longitude) / 1000000,
-		Altitude:  common.Altitude,
-		Speed:     float64(common.Speed) / 10,
-		Direction: common.Direction,
-		Time:      time,
-		ExtInfo:   extInfo,
-		Warnings:  warnings,
+		Alarm:         common.Alarm,
+		Status:        common.Status,
+		Latitude:      float64(common.Latitude) / 1000000,
+		Longitude:     float64(common.Longitude) / 1000000,
+		Altitude:      common.Altitude,
+		Speed:         float64(common.Speed) / 10,
+		Direction:     common.Direction,
+		Time:          time,
+		ExtInfo:       extInfo,
+		ParsedExtInfo: parsedExtInfo,
+		Warnings:      warnings,
 	}, nil
 }

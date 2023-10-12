@@ -34,6 +34,7 @@
                 <el-table-column prop="altitude" label="海拔(m)" width="100" align="right"></el-table-column>
                 <el-table-column prop="speed" label="速度(km/h)" width="100" align="right"></el-table-column>
                 <el-table-column prop="direction" label="航向(°)" width="100" align="right"></el-table-column>
+                <el-table-column prop="mileage" label="里程(km)" width="100" align="right"></el-table-column>
             </DataTable>
         </div>
     </div>
