@@ -21,6 +21,7 @@ type msgEntry struct {
 }
 
 type decodeBodyFunc func(base *msgBody_Base, raw []byte) (any, error)
+type entryFilterFunc func(msg any) bool
 
 func decodeEntries(entries []*msgEntry) any {
 	base := &msgBody_Base{
@@ -48,6 +49,15 @@ func decodeEntries(entries []*msgEntry) any {
 	return body
 }
 
+func newEntryFilter(msgID uint16, c *gin.Context) entryFilterFunc {
+	switch msgID {
+	case 0x0200:
+		return newEntryFilter_0200(c)
+	default:
+		return func(msg any) bool { return true }
+	}
+}
+
 func queryBody(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 	var params struct {
 		SimNo string    `form:"simNo" binding:"required"`
@@ -61,6 +71,7 @@ func queryBody(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 	}
 	list := make([]any, 0)
 	entries := make([]*msgEntry, 0)
+	filter := newEntryFilter(params.MsgID, c)
 	if err := mdb.Iterate(params.SimNo, params.Since, func(mi *msg.MsgItem) error {
 		mk, err := mi.Key()
 		if err != nil {
@@ -84,7 +95,9 @@ func queryBody(mdb *msg.MsgDB, c *gin.Context) (res any, code int, err error) {
 		}
 		entries = append(entries, &msgEntry{Key: mk, Value: m})
 		if len(entries) == int(entries[0].Key.PartTotal) {
-			list = append(list, decodeEntries(entries))
+			if item := decodeEntries(entries); filter(item) {
+				list = append(list, item)
+			}
 			entries = make([]*msgEntry, 0)
 		}
 		return nil

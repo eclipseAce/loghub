@@ -2,7 +2,11 @@ package web
 
 import (
 	"loghub/msg"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type msgBody_0200 struct {
@@ -49,4 +53,31 @@ func decodeBody_0200(base *msgBody_Base, raw []byte) (any, error) {
 		}
 	}
 	return body, nil
+}
+
+func newEntryFilter_0200(c *gin.Context) entryFilterFunc {
+	qs := strings.Split(c.Request.URL.Query().Get("extIds"), ",")
+	if qs[0] == "" {
+		return func(msg any) bool { return true }
+	}
+	extIds := make([]uint8, len(qs))
+	for _, q := range qs {
+		if extId, err := strconv.Atoi(q); err == nil {
+			extIds = append(extIds, uint8(extId))
+		}
+	}
+	return func(msg any) bool {
+		msg0200, ok := msg.(*msgBody_0200)
+		if !ok {
+			return true
+		}
+		for _, extId := range extIds {
+			for _, extInfo := range msg0200.ExtInfo {
+				if extId == extInfo.ID {
+					return true
+				}
+			}
+		}
+		return false
+	}
 }

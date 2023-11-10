@@ -10,12 +10,17 @@
             <el-form-item label="结束时间戳" prop="until">
                 <el-date-picker v-model="query.until" type="datetime" placeholder="选择最晚时间" align="right" />
             </el-form-item>
+            <el-form-item label="包含附加信息" prop="extIds">
+                <el-select v-model="query.extIds" multiple placeholder="任意">
+                    <el-option v-for="item in extIds" :key="item" :value="item" :label="formatExtId(item)" />
+                </el-select>
+            </el-form-item>
             <el-form-item>
                 <el-button type="primary" :loading="loading" @click="onQuery">查询</el-button>
             </el-form-item>
         </el-form>
         <div class="view-wrapper" v-loading="loading">
-            <DataTable :data="msgs" :filename="filename" style="height: 100%">
+            <DataTable :data="msgs" :filename="filename" style="flex: 1 1">
                 <el-table-column prop="timestamp" label="时间戳" width="160" align="center"></el-table-column>
                 <el-table-column prop="warnings" label="" width="32" align="center">
                     <template slot-scope="{ row: { warnings } }">
@@ -35,6 +40,14 @@
                 <el-table-column prop="speed" label="速度(km/h)" width="100" align="right"></el-table-column>
                 <el-table-column prop="direction" label="航向(°)" width="100" align="right"></el-table-column>
                 <el-table-column prop="mileage" label="里程(km)" width="100" align="right"></el-table-column>
+                <el-table-column
+                    v-for="extId in query.extIds"
+                    :key="extId"
+                    :prop="`extInfo_${formatExtId(extId)}`"
+                    :label="`附加信息(${formatExtId(extId)})`"
+                    width="200px"
+                    align="left"
+                ></el-table-column>
             </DataTable>
         </div>
     </div>
@@ -83,6 +96,7 @@ export default {
                 simNo: '',
                 since: moment().subtract(20, 'm').toDate(),
                 until: null,
+                extIds: [],
             },
             rules: {
                 simNo: [{ type: 'string', required: true, message: '请输入SimNo' }],
@@ -91,9 +105,29 @@ export default {
             pickerOptions: {
                 shortcuts: [createShortcut('20分钟前', 60 * 20), createShortcut('1小时前', 3600), createShortcut('1天前', 3600 * 24)],
             },
+            filename: '',
+            extIds: [],
         }
     },
     methods: {
+        formatExtId(id) {
+            return id.toString(16).padStart(2, 0).toUpperCase()
+        },
+        formatExtData(extInfo, id) {
+            return extInfo
+                .filter((it) => it.id === id)
+                .map((it) => this.base64ToHex(it.data))
+                .join('\r\n')
+        },
+        base64ToHex(str) {
+            const raw = atob(str)
+            let result = []
+            for (let i = 0; i < raw.length; i++) {
+                const hex = raw.charCodeAt(i).toString(16)
+                result.push(hex.length === 2 ? hex : '0' + hex)
+            }
+            return result.join(' ').toUpperCase()
+        },
         onQuery() {
             this.$refs.queryForm.validate(async (valid) => {
                 if (!valid) {
@@ -101,16 +135,18 @@ export default {
                 }
                 this.$refs.simNoInput.appendHistory()
                 this.loading = true
+                this.extIds = []
                 try {
                     const params = {
                         simNo: this.query.simNo,
                         since: moment(this.query.since).format(dateFormat),
                         until: moment(this.query.until || new Date()).format(dateFormat), // default to now
                         msgId: 0x0200,
+                        extIds: this.query.extIds.join(',')
                     }
                     const result = await this.$http.get('/queryBody', { params })
-                    this.msgs = result.reverse().map((it) =>
-                        Object.assign(it, {
+                    this.msgs = result.reverse().map((it) => {
+                        const row = Object.assign(it, {
                             timestamp: moment(it.timestamp).format(dateFormat),
                             time: moment(it.time).format(dateFormat),
                             alarm: formatBits(it.alarm),
@@ -118,7 +154,12 @@ export default {
                             speed: it.speed.toFixed(1),
                             lnglat: `${it.longitude.toFixed(6)},${it.latitude.toFixed(6)}`,
                         })
-                    )
+                        it.extInfo.forEach((ei) => (row[`extInfo_${this.formatExtId(ei.id)}`] = this.base64ToHex(ei.data)))
+                        return row
+                    })
+                    const extIds = {}
+                    result.forEach((it) => it.extInfo.forEach((extInfo) => (extIds[extInfo.id] = true)))
+                    this.extIds = Object.keys(extIds).map((it) => parseInt(it))
                     this.filename = `${params.simNo}_0200_${moment(params.since).format(filenameDateFormat)}-${moment(params.until).format(filenameDateFormat)}`
                 } finally {
                     this.loading = false
